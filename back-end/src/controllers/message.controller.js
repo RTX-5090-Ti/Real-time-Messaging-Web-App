@@ -1,0 +1,188 @@
+import mongoose from "mongoose";
+
+import Message from "../models/Message.js";
+import Conversation from "../models/Conversation.js";
+
+function upsertLastRead(convo, userId, at) {
+  convo.participants = convo.participants || [];
+  const idx = convo.participants.findIndex(
+    (p) => p.userId?.toString() === userId.toString()
+  );
+  if (idx === -1) {
+    convo.participants.push({ userId, lastReadAt: at, clearedAt: null });
+  } else {
+    convo.participants[idx].lastReadAt = at;
+  }
+}
+
+function toClientAttachment(a) {
+  return {
+    kind: a.kind,
+    url: a.url,
+    name: a.name,
+    mime: a.mime,
+    size: a.size,
+
+    // gif url-only fields
+    provider: a.provider || "",
+    gifId: a.gifId || "",
+    preview: a.preview || "",
+    width: a.width || 0,
+    height: a.height || 0,
+    mp4: a.mp4 || "",
+  };
+}
+
+function sanitizeAttachment(a) {
+  const kind = a?.kind;
+  const url = typeof a?.url === "string" ? a.url.trim() : "";
+
+  if (!kind || !url) return null;
+
+  const base = {
+    kind,
+    url,
+    name: a?.name || "",
+    mime: a?.mime || "",
+    size: Number(a?.size) || 0,
+  };
+
+  if (kind === "gif") {
+    return {
+      ...base,
+      provider: String(a?.provider || "").trim(), // validated by rules
+      gifId: String(a?.gifId || "").trim(),
+      preview: String(a?.preview || "").trim(),
+      width: Number(a?.width) || 0,
+      height: Number(a?.height) || 0,
+      mp4: String(a?.mp4 || "").trim(),
+    };
+  }
+
+  // image/file/sticker keep base
+  return base;
+}
+
+// Lấy danh sách tin nhắn của 1 conversation
+export async function getMessages(req, res) {
+  const { conversationId, before, limit } = req.query;
+  const myId = req.user.id;
+
+  if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+    return res.status(400).json({ message: "conversationId không hợp lệ" });
+  }
+
+  const convo = await Conversation.findById(conversationId);
+  if (!convo)
+    return res.status(404).json({ message: "Conversation không tồn tại" });
+
+  const isMember = convo.members.some((m) => m.toString() === myId);
+  if (!isMember)
+    return res.status(403).json({ message: "Không có quyền truy cập" });
+
+  const pageSize = Math.min(Math.max(parseInt(limit || "30", 10), 1), 100);
+
+  // Messenger-style "delete/clear chat": hide messages older than clearedAt for this user
+  const myP = (convo.participants || []).find(
+    (p) => p.userId?.toString() === myId.toString()
+  );
+  const clearedAt = myP?.clearedAt ? new Date(myP.clearedAt) : null;
+
+  const findQuery = { conversationId };
+  const createdAtCond = {};
+
+  if (clearedAt && !Number.isNaN(clearedAt.getTime())) {
+    createdAtCond.$gt = clearedAt;
+  }
+
+  if (before) {
+    const d = new Date(before);
+    if (!Number.isNaN(d.getTime())) {
+      createdAtCond.$lt = d;
+    }
+  }
+
+  if (Object.keys(createdAtCond).length) {
+    findQuery.createdAt = createdAtCond;
+  }
+
+  // lấy newest->older, limit+1 để biết có còn nữa không
+  const docs = await Message.find(findQuery)
+    .sort({ createdAt: -1 })
+    .limit(pageSize + 1)
+    .populate("senderId", "_id name");
+
+  const hasMore = docs.length > pageSize;
+  const page = (hasMore ? docs.slice(0, pageSize) : docs).reverse(); // trả về oldest->newest cho UI
+
+  const nextBefore = page.length ? page[0].createdAt : null;
+
+  return res.json({
+    messages: page.map((m) => ({
+      id: m._id,
+      text: m.text,
+      attachments: (m.attachments || []).map(toClientAttachment),
+      sender: m.senderId ? { id: m.senderId._id, name: m.senderId.name } : null,
+      createdAt: m.createdAt,
+    })),
+    hasMore,
+    nextBefore, // FE dùng làm cursor
+  });
+}
+
+// Gửi tin nhắn
+export async function sendMessage(req, res) {
+  const { conversationId, text, attachments } = req.body;
+  const myId = req.user.id;
+
+  const convo = await Conversation.findOne({
+    _id: conversationId,
+    members: myId,
+  });
+  if (!convo)
+    return res.status(403).json({ message: "không có quyền gửi tin" });
+
+  const trimmed = String(text || "").trim();
+
+  const safeAttachments = Array.isArray(attachments)
+    ? attachments.map(sanitizeAttachment).filter(Boolean)
+    : [];
+
+  if (!trimmed && safeAttachments.length === 0) {
+    return res.status(400).json({ message: "text or attachments is required" });
+  }
+
+  const msg = await Message.create({
+    conversationId,
+    senderId: myId,
+    text: trimmed,
+    attachments: safeAttachments,
+  });
+
+  convo.lastMessageAt = new Date();
+
+  // Người gửi rõ ràng đã đọc đến đây
+  upsertLastRead(convo, new mongoose.Types.ObjectId(myId), new Date());
+  await convo.save();
+
+  // Nếu ai đó đã 'delete chat' trước đó, có message mới thì hiện lại
+  try {
+    await Conversation.updateOne(
+      { _id: conversationId },
+      { $pull: { hiddenFor: { $in: convo.members } } }
+    );
+  } catch (e) {}
+
+  res.status(201).json({
+    message: {
+      id: msg._id,
+      text: msg.text,
+      attachments: (msg.attachments || []).map(toClientAttachment),
+      senderId: {
+        id: myId,
+        name: req.user.name,
+      },
+      createdAt: msg.createdAt,
+    },
+  });
+}
