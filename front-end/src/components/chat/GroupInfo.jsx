@@ -1,100 +1,151 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 
-function Row({ left, right }) {
+function Section({ title, right, open, onToggle, children }) {
   return (
-    <div className="flex items-center justify-between px-3 py-2 transition rounded-xl hover:bg-zinc-50">
-      <div className="flex items-center gap-2 text-sm text-zinc-700">
-        <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-zinc-100">
-          ▦
-        </span>
-        <span className="capitalize">{left}</span>
-      </div>
-      <span className="text-sm text-zinc-500">{right}</span>
-    </div>
-  );
-}
-
-function FilesSection({ files }) {
-  return (
-    <div>
-      <p className="mb-3 text-sm font-semibold text-zinc-900">Files</p>
-
-      {files?.length ? (
-        <div className="space-y-1">
-          {files.map((f) => (
-            <Row key={f.label} left={f.label} right={f.count} />
-          ))}
+    <div className="overflow-hidden border rounded-2xl border-zinc-200">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex items-center justify-between w-full px-4 py-3 cursor-pointer hover:bg-zinc-50"
+      >
+        <div className="flex items-center min-w-0 gap-2">
+          <p className="font-semibold truncate text-zinc-900">{title}</p>
+          {right != null ? (
+            <span className="text-sm text-zinc-500 shrink-0">{right}</span>
+          ) : null}
         </div>
-      ) : (
-        <div className="px-3 py-3 text-sm border rounded-2xl border-zinc-200 bg-zinc-50 text-zinc-500">
-          No files yet.
-        </div>
-      )}
-    </div>
-  );
-}
 
-function MembersSection({ members, membersTitle }) {
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-semibold text-zinc-900">{membersTitle}</p>
-        <button
-          className="text-sm font-semibold text-violet-700 hover:text-violet-800"
-          type="button"
-          onClick={() => {}}
+        <span
+          className={[
+            "transition-transform text-zinc-500",
+            open ? "rotate-180" : "rotate-0",
+          ].join(" ")}
+          aria-hidden="true"
         >
-          View all
-        </button>
+          ▾
+        </span>
+      </button>
+
+      {open ? <div className="p-4 pt-0">{children}</div> : null}
+    </div>
+  );
+}
+
+function MediaGrid({ items }) {
+  if (!items?.length) {
+    return (
+      <div className="px-3 py-3 text-sm border rounded-2xl border-zinc-200 bg-zinc-50 text-zinc-500">
+        There are no photos/videos in this conversation.
       </div>
+    );
+  }
 
-      {members?.length ? (
-        <div className="space-y-2">
-          {members.map((m) => (
-            <div
-              key={m.id}
-              className="flex items-center gap-3 p-3 transition rounded-2xl hover:bg-zinc-50"
-            >
-              <img
-                src={m.avatar}
-                alt={m.name}
-                className="object-cover w-10 h-10 rounded-full"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold truncate text-zinc-900">{m.name}</p>
-                <p className="text-xs text-zinc-500">{m.role ?? "member"}</p>
-              </div>
-
-              <button
-                className="text-xs font-semibold text-zinc-600 hover:text-zinc-800"
-                type="button"
-                title="More"
-              >
-                …
-              </button>
+  return (
+    <div className="grid grid-cols-3 gap-2 pt-3">
+      {items.map((it) => {
+        const isVideo = it.kind === "video";
+        return (
+          <button
+            key={it.key}
+            type="button"
+            className="relative overflow-hidden border cursor-pointer rounded-xl border-zinc-200 bg-zinc-50 hover:opacity-95"
+            title={isVideo ? "Open video" : "Open image"}
+            onClick={() => window.open(it.url, "_blank", "noopener,noreferrer")}
+          >
+            <div className="aspect-square">
+              {isVideo ? (
+                <video
+                  src={it.url}
+                  className="object-cover w-full h-full"
+                  muted
+                  playsInline
+                  preload="metadata"
+                />
+              ) : (
+                <img
+                  src={it.url}
+                  alt=""
+                  className="object-cover w-full h-full"
+                  loading="lazy"
+                />
+              )}
             </div>
-          ))}
-        </div>
-      ) : (
-        <div className="px-3 py-3 text-sm border rounded-2xl border-zinc-200 bg-zinc-50 text-zinc-500">
-          No members to show.
-        </div>
-      )}
+
+            {isVideo ? (
+              <span className="absolute bottom-1 right-1 text-[11px] px-1.5 py-0.5 rounded-lg bg-black/60 text-white">
+                ▶
+              </span>
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FileList({ items }) {
+  if (!items?.length) {
+    return (
+      <div className="px-3 py-3 text-sm border rounded-2xl border-zinc-200 bg-zinc-50 text-zinc-500">
+        No files have been shared in this conversation yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="pt-3 space-y-2">
+      {items.map((it) => (
+        <button
+          key={it.key}
+          type="button"
+          className="flex items-center w-full gap-3 p-3 text-left border cursor-pointer rounded-2xl border-zinc-200 hover:bg-zinc-50"
+          title="Open file"
+          onClick={() => window.open(it.url, "_blank", "noopener,noreferrer")}
+        >
+          <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-zinc-100">
+            📎
+          </span>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold truncate text-zinc-900">
+              {it.name || "File"}
+            </p>
+            <p className="text-xs truncate text-zinc-500">
+              {it.mime || it.url}
+            </p>
+          </div>
+          <span className="text-xs text-zinc-500">↗</span>
+        </button>
+      ))}
     </div>
   );
 }
 
 export default function GroupInfo({ chat, groupInfo, open, onClose }) {
-  const files = groupInfo?.files || [];
-  const members = groupInfo?.members || [];
+  const [mediaOpen, setMediaOpen] = useState(true);
+  const [fileOpen, setFileOpen] = useState(true);
+  const [showAllMedia, setShowAllMedia] = useState(false);
 
-  const membersTitle = chat
-    ? `${chat.members ?? members.length} members`
-    : "Members";
+  const name = chat?.name || "Conversation";
+  const avatar = chat?.avatar;
+
+  const counts = groupInfo?.counts || {};
+  const mediaItems = groupInfo?.mediaItems || [];
+  const mediaAll = groupInfo?.mediaAll || mediaItems;
+  const fileItems = groupInfo?.fileItems || [];
+
+  const mediaRight = useMemo(() => {
+    const total = Number(counts.mediaTotal ?? mediaItems.length) || 0;
+    return total ? `(${total})` : "(0)";
+  }, [counts.mediaTotal, mediaItems.length]);
+
+  const fileRight = useMemo(() => {
+    const total = Number(counts.docs ?? fileItems.length) || 0;
+    return total ? `(${total})` : "(0)";
+  }, [counts.docs, fileItems.length]);
 
   return (
     <>
-      {/* MOBILE: drawer overlay */}
+      {/* MOBILE overlay */}
       <div
         className={[
           "fixed inset-0 z-[150] lg:hidden transition-opacity duration-200",
@@ -114,7 +165,7 @@ export default function GroupInfo({ chat, groupInfo, open, onClose }) {
             <p className="font-semibold text-zinc-900">Conversation Info</p>
             <button
               onClick={onClose}
-              className="h-9 w-9 rounded-xl hover:bg-zinc-100 text-zinc-700"
+              className="cursor-pointer h-9 w-9 rounded-xl hover:bg-zinc-100 text-zinc-700"
               title="Close"
               type="button"
             >
@@ -122,14 +173,71 @@ export default function GroupInfo({ chat, groupInfo, open, onClose }) {
             </button>
           </div>
 
-          <div className="p-5 space-y-6 overflow-y-auto">
-            <FilesSection files={files} />
-            <MembersSection members={members} membersTitle={membersTitle} />
+          <div className="p-5 space-y-5 overflow-y-auto">
+            {/* TOP: avatar + name (style giống Sidebar, nhưng tone theo nền trắng) */}
+            <div className="flex flex-col items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {}}
+                className="w-20 h-20 rounded-full overflow-hidden cursor-pointer transition outline-none focus:outline-none focus:ring-0 hover:bg-zinc-50 hover:shadow-[0_0_0_3px_rgba(0,0,0,0.08)]"
+                title="Open profile"
+              >
+                {avatar ? (
+                  <img
+                    src={avatar}
+                    alt={name}
+                    className="object-cover w-full h-full"
+                  />
+                ) : (
+                  <div className="grid w-full h-full place-items-center bg-zinc-100 text-zinc-600">
+                    🙂
+                  </div>
+                )}
+              </button>
+
+              <p className="text-lg font-bold text-center text-zinc-900">
+                {name}
+              </p>
+            </div>
+
+            {/* Sections */}
+            <Section
+              title="Ảnh / Video"
+              right={mediaRight}
+              open={mediaOpen}
+              onToggle={() => setMediaOpen((v) => !v)}
+            >
+              <div
+                className={
+                  showAllMedia ? "max-h-[320px] overflow-y-auto pr-1" : ""
+                }
+              >
+                <MediaGrid items={showAllMedia ? mediaAll : mediaItems} />
+              </div>
+
+              <button
+                type="button"
+                className="w-full h-10 mt-3 text-sm font-semibold border cursor-pointer rounded-xl border-zinc-200 hover:bg-zinc-50 text-zinc-700 disabled:opacity-50 disabled:hover:bg-white"
+                onClick={() => setShowAllMedia((v) => !v)}
+                disabled={!showAllMedia && mediaAll.length <= mediaItems.length}
+              >
+                {showAllMedia ? "Collapse" : "View all"}
+              </button>
+            </Section>
+
+            <Section
+              title="File"
+              right={fileRight}
+              open={fileOpen}
+              onToggle={() => setFileOpen((v) => !v)}
+            >
+              <FileList items={fileItems} />
+            </Section>
           </div>
         </aside>
       </div>
 
-      {/* DESKTOP: inline panel có width=0 khi đóng để ChatWindow chiếm full */}
+      {/* DESKTOP (lg) */}
       <aside
         className={[
           "hidden lg:flex shrink-0 bg-white overflow-hidden",
@@ -137,12 +245,21 @@ export default function GroupInfo({ chat, groupInfo, open, onClose }) {
           open ? "w-[330px] border-l border-zinc-200" : "w-0 border-l-0",
         ].join(" ")}
       >
-        <div className="w-[330px] h-full flex flex-col">
+        {/* container cố định 330 để content không bị co méo */}
+        <div
+          className={[
+            "w-[330px] h-full flex flex-col",
+            "transition-all duration-200 ease-out",
+            open
+              ? "opacity-100 translate-x-0"
+              : "opacity-0 translate-x-2 pointer-events-none",
+          ].join(" ")}
+        >
           <div className="flex items-center justify-between h-16 px-5 border-b border-zinc-200">
             <p className="font-semibold text-zinc-900">Conversation Info</p>
             <button
               onClick={onClose}
-              className="h-9 w-9 rounded-xl hover:bg-zinc-100 text-zinc-700"
+              className="cursor-pointer h-9 w-9 rounded-xl hover:bg-zinc-100 text-zinc-700"
               title="Close"
               type="button"
             >
@@ -150,9 +267,64 @@ export default function GroupInfo({ chat, groupInfo, open, onClose }) {
             </button>
           </div>
 
-          <div className="p-5 space-y-6 overflow-y-auto">
-            <FilesSection files={files} />
-            <MembersSection members={members} membersTitle={membersTitle} />
+          <div className="p-5 space-y-5 overflow-y-auto">
+            <div className="flex flex-col items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {}}
+                className="w-20 h-20 rounded-full overflow-hidden cursor-pointer transition outline-none focus:outline-none focus:ring-0 hover:bg-zinc-50 hover:shadow-[0_0_0_3px_rgba(0,0,0,0.08)]"
+                title="Open profile"
+              >
+                {avatar ? (
+                  <img
+                    src={avatar}
+                    alt={name}
+                    className="object-cover w-full h-full"
+                  />
+                ) : (
+                  <div className="grid w-full h-full place-items-center bg-zinc-100 text-zinc-600">
+                    🙂
+                  </div>
+                )}
+              </button>
+
+              <p className="text-lg font-bold text-center text-zinc-900">
+                {name}
+              </p>
+            </div>
+
+            <Section
+              title="Ảnh / Video"
+              right={mediaRight}
+              open={mediaOpen}
+              onToggle={() => setMediaOpen((v) => !v)}
+            >
+              <div
+                className={
+                  showAllMedia ? "max-h-[320px] overflow-y-auto pr-1" : ""
+                }
+              >
+                <MediaGrid items={showAllMedia ? mediaAll : mediaItems} />
+              </div>
+
+              <button
+                type="button"
+                className="w-full h-10 mt-3 text-sm font-semibold border cursor-pointer rounded-xl border-zinc-200 hover:bg-zinc-50 text-zinc-700 disabled:opacity-50 disabled:hover:bg-white"
+                onClick={() => setShowAllMedia((v) => !v)}
+                disabled={!showAllMedia && mediaAll.length <= mediaItems.length}
+              >
+                {showAllMedia ? "Collapse" : "View all"}
+              </button>
+            </Section>
+
+            <Section
+              title="File"
+              right={fileRight}
+              open={fileOpen}
+              onToggle={() => setFileOpen((v) => !v)}
+            >
+              <FileList items={fileItems} />
+            </Section>
           </div>
         </div>
       </aside>

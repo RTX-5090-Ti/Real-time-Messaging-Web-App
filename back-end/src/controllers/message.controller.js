@@ -110,7 +110,12 @@ export async function getMessages(req, res) {
   const docs = await Message.find(findQuery)
     .sort({ createdAt: -1 })
     .limit(pageSize + 1)
-    .populate("senderId", "_id name");
+    .populate("senderId", "_id name")
+    .populate({
+      path: "replyTo",
+      select: "_id text senderId attachments createdAt",
+      populate: { path: "senderId", select: "_id name" },
+    });
 
   const hasMore = docs.length > pageSize;
   const page = (hasMore ? docs.slice(0, pageSize) : docs).reverse(); // trả về oldest->newest cho UI
@@ -124,6 +129,29 @@ export async function getMessages(req, res) {
       attachments: (m.attachments || []).map(toClientAttachment),
       sender: m.senderId ? { id: m.senderId._id, name: m.senderId.name } : null,
       createdAt: m.createdAt,
+      replyTo: m.replyTo
+        ? {
+            id: m.replyTo._id,
+            text: m.replyTo.text,
+            attachments: (m.replyTo.attachments || []).map(toClientAttachment),
+            sender: m.replyTo.senderId
+              ? { id: m.replyTo.senderId._id, name: m.replyTo.senderId.name }
+              : null,
+            createdAt: m.replyTo.createdAt,
+          }
+        : null,
+
+      reactions: Array.isArray(m.reactions)
+        ? m.reactions.map((r) => ({ userId: String(r.userId), emoji: r.emoji }))
+        : [],
+      pinned: !!m.pinned,
+      pinnedAt: m.pinnedAt,
+      pinnedBy: m.pinnedBy ? String(m.pinnedBy) : null,
+
+      editedAt: m.editedAt,
+      isRecalled: !!m.isRecalled,
+      recalledAt: m.recalledAt,
+      recalledBy: m.recalledBy ? String(m.recalledBy) : null,
     })),
     hasMore,
     nextBefore, // FE dùng làm cursor
@@ -132,7 +160,7 @@ export async function getMessages(req, res) {
 
 // Gửi tin nhắn
 export async function sendMessage(req, res) {
-  const { conversationId, text, attachments } = req.body;
+  const { conversationId, text, attachments, replyTo } = req.body;
   const myId = req.user.id;
 
   const convo = await Conversation.findOne({
@@ -152,12 +180,38 @@ export async function sendMessage(req, res) {
     return res.status(400).json({ message: "text or attachments is required" });
   }
 
+  let replyDoc = null;
+  if (replyTo) {
+    if (!mongoose.Types.ObjectId.isValid(replyTo)) {
+      return res.status(400).json({ message: "replyTo không hợp lệ" });
+    }
+    replyDoc = await Message.findById(replyTo).select("conversationId");
+    if (
+      !replyDoc ||
+      String(replyDoc.conversationId) !== String(conversationId)
+    ) {
+      return res
+        .status(400)
+        .json({ message: "replyTo không tồn tại trong conversation này" });
+    }
+  }
+
   const msg = await Message.create({
     conversationId,
     senderId: myId,
     text: trimmed,
     attachments: safeAttachments,
+    replyTo: replyTo || null,
   });
+
+  await msg.populate("senderId", "_id name");
+  if (msg.replyTo) {
+    await msg.populate({
+      path: "replyTo",
+      select: "_id text senderId attachments createdAt",
+      populate: { path: "senderId", select: "_id name" },
+    });
+  }
 
   convo.lastMessageAt = new Date();
 
@@ -183,6 +237,138 @@ export async function sendMessage(req, res) {
         name: req.user.name,
       },
       createdAt: msg.createdAt,
+      replyTo: msg.replyTo
+        ? {
+            id: msg.replyTo._id,
+            text: msg.replyTo.text,
+            attachments: (msg.replyTo.attachments || []).map(
+              toClientAttachment
+            ),
+            sender: msg.replyTo.senderId
+              ? {
+                  id: msg.replyTo.senderId._id,
+                  name: msg.replyTo.senderId.name,
+                }
+              : null,
+            createdAt: msg.replyTo.createdAt,
+          }
+        : null,
+      reactions: (msg.reactions || []).map((r) => ({
+        userId: String(r.userId),
+        emoji: r.emoji,
+      })),
+    },
+  });
+}
+
+export async function editMessage(req, res) {
+  const myId = req.user.id;
+  const mid = req.params.id;
+  const trimmed = String(req.body?.text || "").trim();
+
+  if (!mongoose.Types.ObjectId.isValid(mid)) {
+    return res.status(400).json({ message: "messageId không hợp lệ" });
+  }
+  if (!trimmed) return res.status(400).json({ message: "text is required" });
+
+  const msg = await Message.findById(mid);
+  if (!msg) return res.status(404).json({ message: "Message không tồn tại" });
+
+  const convo = await Conversation.findOne({
+    _id: msg.conversationId,
+    members: myId,
+  }).select("_id");
+  if (!convo) return res.status(403).json({ message: "Không có quyền" });
+
+  if (String(msg.senderId) !== String(myId)) {
+    return res.status(403).json({ message: "Không phải tin của bạn" });
+  }
+  if (msg.isRecalled) {
+    return res.status(400).json({ message: "Message đã thu hồi" });
+  }
+
+  msg.text = trimmed;
+  msg.editedAt = new Date();
+  await msg.save();
+
+  return res.json({
+    ok: true,
+    message: { id: msg._id, text: msg.text, editedAt: msg.editedAt },
+  });
+}
+
+export async function recallMessage(req, res) {
+  const myId = req.user.id;
+  const mid = req.params.id;
+
+  if (!mongoose.Types.ObjectId.isValid(mid)) {
+    return res.status(400).json({ message: "messageId không hợp lệ" });
+  }
+
+  const msg = await Message.findById(mid);
+  if (!msg) return res.status(404).json({ message: "Message không tồn tại" });
+
+  const convo = await Conversation.findOne({
+    _id: msg.conversationId,
+    members: myId,
+  }).select("_id");
+  if (!convo) return res.status(403).json({ message: "Không có quyền" });
+
+  if (String(msg.senderId) !== String(myId)) {
+    return res.status(403).json({ message: "Không phải tin của bạn" });
+  }
+
+  msg.text = "Đã thu hồi tin nhắn";
+  msg.attachments = [];
+  msg.reactions = [];
+  msg.isRecalled = true;
+  msg.recalledAt = new Date();
+  msg.recalledBy = new mongoose.Types.ObjectId(myId);
+  await msg.save();
+
+  return res.json({
+    ok: true,
+    message: {
+      id: msg._id,
+      text: msg.text,
+      attachments: [],
+      reactions: [],
+      isRecalled: true,
+      recalledAt: msg.recalledAt,
+    },
+  });
+}
+
+export async function togglePinMessage(req, res) {
+  const myId = req.user.id;
+  const mid = req.params.id;
+
+  if (!mongoose.Types.ObjectId.isValid(mid)) {
+    return res.status(400).json({ message: "messageId không hợp lệ" });
+  }
+
+  const msg = await Message.findById(mid);
+  if (!msg) return res.status(404).json({ message: "Message không tồn tại" });
+
+  const convo = await Conversation.findOne({
+    _id: msg.conversationId,
+    members: myId,
+  }).select("_id");
+  if (!convo) return res.status(403).json({ message: "Không có quyền" });
+
+  const nextPinned = !msg.pinned;
+  msg.pinned = nextPinned;
+  msg.pinnedAt = nextPinned ? new Date() : null;
+  msg.pinnedBy = nextPinned ? new mongoose.Types.ObjectId(myId) : null;
+  await msg.save();
+
+  return res.json({
+    ok: true,
+    message: {
+      id: msg._id,
+      pinned: msg.pinned,
+      pinnedAt: msg.pinnedAt,
+      pinnedBy: msg.pinnedBy ? String(msg.pinnedBy) : null,
     },
   });
 }

@@ -8,7 +8,7 @@ const participantSchema = new mongoose.Schema(
       required: true,
     },
     lastReadAt: { type: Date, default: null },
-    // When user deletes/clears chat, they won't see messages older than this.
+    //  Khi người dùng xóa/làm sạch cuộc trò chuyện, họ sẽ không thấy các tin nhắn cũ hơn thời điểm này.
     clearedAt: { type: Date, default: null },
   },
   { _id: false }

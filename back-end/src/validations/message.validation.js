@@ -24,6 +24,11 @@ export const sendMessageRules = [
 
   body("text").optional().isString(),
 
+  body("replyTo")
+    .optional({ nullable: true })
+    .custom((v) => v === null || mongoose.Types.ObjectId.isValid(v))
+    .withMessage("replyTo không hợp lệ"),
+
   body("attachments").optional().isArray(),
 
   body("attachments.*.kind")

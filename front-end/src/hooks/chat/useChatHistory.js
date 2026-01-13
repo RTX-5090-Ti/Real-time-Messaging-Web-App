@@ -30,6 +30,31 @@ export function useChatHistory({
         attachments,
         time: formatTime(createdAt),
         createdAt,
+        replyTo: m.replyTo
+          ? {
+              id: String(m.replyTo.id ?? m.replyTo._id),
+              text: m.replyTo.text ?? "",
+              attachments: Array.isArray(m.replyTo.attachments)
+                ? m.replyTo.attachments
+                : [],
+              sender: m.replyTo.sender || m.replyTo.senderId || null,
+            }
+          : null,
+
+        reactions: Array.isArray(m.reactions)
+          ? m.reactions.map((r) => ({
+              userId: String(r.userId?.id ?? r.userId?._id ?? r.userId),
+              emoji: r.emoji,
+            }))
+          : [],
+        pinned: !!m.pinned,
+        pinnedAt: m.pinnedAt ?? null,
+        pinnedBy: m.pinnedBy ?? null,
+
+        editedAt: m.editedAt ?? null,
+        isRecalled: !!m.isRecalled,
+        recalledAt: m.recalledAt ?? null,
+        recalledBy: m.recalledBy ?? null,
       };
     },
     [meId]

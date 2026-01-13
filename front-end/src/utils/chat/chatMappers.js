@@ -5,7 +5,21 @@ export function mapConversationsToChats({
   avatarFromName,
   formatTimeOrDate,
 }) {
-  return (convos || []).map((c) => {
+  const getTs = (c) => {
+    const x =
+      c?.lastMessage?.createdAt ?? c?.lastMessageAt ?? c?.createdAt ?? 0;
+    const t = new Date(x).getTime();
+    return Number.isFinite(t) ? t : 0;
+  };
+
+  const list = Array.isArray(convos) ? [...convos] : [];
+  list.sort((a, b) => {
+    const dt = getTs(b) - getTs(a);
+    if (dt !== 0) return dt;
+    return String(b?.id || "").localeCompare(String(a?.id || ""));
+  });
+
+  return list.map((c) => {
     const other =
       c.members?.find((m) => String(m.id) !== String(meId)) ??
       c.members?.[0] ??
@@ -13,8 +27,7 @@ export function mapConversationsToChats({
 
     const name = other?.name ?? "Conversation";
     const lastText = c.lastMessage?.text ?? "";
-    const lastTs =
-      c.lastMessage?.createdAt ?? c.lastMessageAt ?? c.updatedAt ?? c.createdAt;
+    const lastTs = c.lastMessage?.createdAt ?? c.lastMessageAt ?? c.createdAt;
 
     return {
       id: String(c.id),
@@ -24,10 +37,8 @@ export function mapConversationsToChats({
       time: formatTimeOrDate(lastTs),
       unread: Number(c.unread ?? 0),
       pinned: false,
-
       members: c.members?.length ?? 2,
       online: other?.id ? (onlineIdsSet.has(String(other.id)) ? 2 : 1) : 0,
-
       otherUserId: other?.id ? String(other.id) : null,
       _raw: c,
     };

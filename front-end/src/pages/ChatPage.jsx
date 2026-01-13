@@ -27,12 +27,43 @@ export default function ChatPage() {
   const [infoOpen, setInfoOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [replyDraft, setReplyDraft] = useState(null);
 
   const [deleteModal, setDeleteModal] = useState({
     open: false,
     chat: null,
     busy: false,
   });
+
+  const [recallModal, setRecallModal] = useState({
+    open: false,
+    cid: null,
+    mid: null,
+    busy: false,
+  });
+
+  const [editModal, setEditModal] = useState({
+    open: false,
+    cid: null,
+    msg: null,
+    text: "",
+    err: "",
+    busy: false,
+  });
+
+  const closeRecallModal = () => {
+    setRecallModal((s) =>
+      s.busy ? s : { open: false, cid: null, mid: null, busy: false }
+    );
+  };
+
+  const closeEditModal = () => {
+    setEditModal((s) =>
+      s.busy
+        ? s
+        : { open: false, cid: null, msg: null, text: "", err: "", busy: false }
+    );
+  };
 
   // core states + bootstrap
   const {
@@ -74,6 +105,37 @@ export default function ChatPage() {
     onNotificationNew: noti.onNotificationNew,
     reloadConversations,
   });
+
+  const previewTextFromAttachments = (attachments) => {
+    if (!Array.isArray(attachments) || attachments.length === 0) return "";
+    const a = attachments[0] || {};
+    const mime = String(a.mime || "").toLowerCase();
+    const url = String(a.url || "").toLowerCase();
+
+    if (mime === "image/gif" || url.endsWith(".gif")) return "GIF";
+    if (mime.startsWith("image/") || a.kind === "image") return "Photo";
+    return a.name ? `File: ${a.name}` : "Attachment";
+  };
+
+  const makeReplyDraft = (msg) => {
+    const preview =
+      String(msg?.text || "").trim() ||
+      previewTextFromAttachments(msg?.attachments) ||
+      "Message";
+    return {
+      id: String(msg.id),
+      name: msg?.name || "User",
+      preview,
+    };
+  };
+
+  const onReplySelect = (msg) => {
+    setReplyDraft(makeReplyDraft(msg));
+  };
+
+  useEffect(() => {
+    setReplyDraft(null);
+  }, [activeChatId]);
 
   // load history when switching chat
   const { hasMore, loadingMore, loadMore } = useChatHistory({
@@ -129,7 +191,7 @@ export default function ChatPage() {
         return next;
       });
 
-      reloadConversations?.().catch(() => {});
+      reloadConversations?.(String(me?.id || "")).catch(() => {});
       closeDeleteModal();
     } catch (err) {
       console.error(err);
@@ -198,15 +260,308 @@ export default function ChatPage() {
       avatar: avatarFromName(m.name || "User"),
     }));
 
+    // ===== derive shared items from messages (images/videos/gifs/files)
+    const list = Array.isArray(messages) ? messages : [];
+
+    let images = 0;
+    let videos = 0;
+    let docs = 0;
+
+    const mediaAll = [];
+    const mediaItems = []; // preview 9
+    const fileAll = [];
+    const fileItems = []; // preview 8
+
+    const isGifUrl = (url) => /\.gif(\?|$)/i.test(String(url || ""));
+
+    // iterate from newest -> oldest so preview is newest
+    for (let mi = list.length - 1; mi >= 0; mi--) {
+      const msg = list[mi];
+      const atts = Array.isArray(msg?.attachments) ? msg.attachments : [];
+
+      for (let ai = 0; ai < atts.length; ai++) {
+        const a = atts[ai];
+        if (!a?.url) continue;
+
+        const kind = String(a.kind || "").toLowerCase();
+        const mime = String(a.mime || a.contentType || "").toLowerCase();
+        const url = a.url;
+
+        const gif = kind === "gif" || mime === "image/gif" || isGifUrl(url);
+        const image = gif || kind === "image" || mime.startsWith("image/");
+        const video = kind === "video" || mime.startsWith("video/");
+
+        if (image) images++;
+        else if (video) videos++;
+        else docs++;
+
+        const item = {
+          key: `${msg?.id || "msg"}:${ai}`,
+          url,
+          kind: video ? "video" : gif ? "gif" : image ? "image" : "file",
+          name:
+            a.name ||
+            a.originalName ||
+            a.filename ||
+            a.public_id ||
+            a.key ||
+            "",
+          size: a.size,
+          mime,
+          createdAt: msg?.createdAt,
+        };
+
+        if (image || video) {
+          mediaAll.push(item);
+          if (mediaItems.length < 9) mediaItems.push(item);
+        } else {
+          fileAll.push(item);
+          if (fileItems.length < 8) fileItems.push(item);
+        }
+      }
+    }
+
     return {
+      // giữ field cũ để khỏi đụng logic cũ
       files: [
-        { label: "Images", count: 0 },
-        { label: "Videos", count: 0 },
-        { label: "Docs", count: 0 },
+        { label: "Images", count: images },
+        { label: "Videos", count: videos },
+        { label: "Docs", count: docs },
       ],
       members: mapped,
+
+      // ✅ thêm field mới cho UI render preview (không phá logic cũ)
+      mediaItems,
+      fileItems,
+      mediaAll,
+      fileAll,
+      counts: { images, videos, docs, mediaTotal: images + videos },
     };
-  }, [activeChat]);
+  }, [activeChat, messages]);
+
+  const onReactMessage = async (messageId, emoji) => {
+    if (!activeChatId || !me?.id) return;
+    const cid = String(activeChatId);
+    const uid = String(me.id);
+
+    // optimistic UI (giữ y như logic cũ của mày)
+    setMessagesByChatId((prev) => {
+      const list = prev[cid] ?? [];
+      const idx = list.findIndex((m) => String(m.id) === String(messageId));
+      if (idx === -1) return prev;
+
+      const msg = list[idx];
+      const cur = Array.isArray(msg.reactions) ? msg.reactions : [];
+      const existIdx = cur.findIndex((r) => String(r.userId) === uid);
+
+      let nextReactions = [...cur];
+      if (existIdx >= 0) {
+        if (nextReactions[existIdx].emoji === emoji)
+          nextReactions.splice(existIdx, 1); // toggle off
+        else nextReactions[existIdx] = { ...nextReactions[existIdx], emoji }; // replace
+      } else {
+        nextReactions.push({ userId: uid, emoji });
+      }
+
+      const next = [...list];
+      next[idx] = { ...msg, reactions: nextReactions };
+      return { ...prev, [cid]: next };
+    });
+
+    // ✅ persist + broadcast
+    if (!socket.connected) return; // offline thì không lưu được
+
+    socket
+      .timeout(8000)
+      .emit(
+        "message:react",
+        { conversationId: cid, messageId, emoji },
+        (err, res) => {
+          // không cần làm gì thêm: server sẽ bắn "message:reaction" về và useChatSocket sẽ patch lại
+          if (err || !res?.ok) console.warn("react failed:", err || res);
+        }
+      );
+  };
+
+  const onPinMessage = async (messageId) => {
+    if (!activeChatId || !messageId) return;
+    const cid = String(activeChatId);
+
+    // optimistic: toggle pinned (không đổi UI, chỉ lưu state)
+    setMessagesByChatId((prev) => {
+      const list = prev[cid] ?? [];
+      const idx = list.findIndex((m) => String(m.id) === String(messageId));
+      if (idx === -1) return prev;
+      const cur = list[idx];
+      const next = [...list];
+      next[idx] = { ...cur, pinned: !cur.pinned };
+      return { ...prev, [cid]: next };
+    });
+
+    try {
+      if (socket.connected) {
+        await new Promise((resolve, reject) => {
+          socket
+            .timeout(8000)
+            .emit(
+              "message:pin",
+              { conversationId: cid, messageId: String(messageId) },
+              (err, res) => {
+                if (err) return reject(err);
+                if (!res?.ok)
+                  return reject(new Error(res?.error || "PIN_FAILED"));
+                resolve(res);
+              }
+            );
+        });
+        return;
+      }
+
+      // fallback REST
+      await ChatAPI.togglePinMessage(String(messageId));
+    } catch (e) {
+      console.warn(e);
+      // revert
+      setMessagesByChatId((prev) => {
+        const list = prev[cid] ?? [];
+        const idx = list.findIndex((m) => String(m.id) === String(messageId));
+        if (idx === -1) return prev;
+        const cur = list[idx];
+        const next = [...list];
+        next[idx] = { ...cur, pinned: !cur.pinned };
+        return { ...prev, [cid]: next };
+      });
+    }
+  };
+
+  const onEditMessage = (msg) => {
+    if (!activeChatId || !me?.id || !msg?.id) return;
+    if (msg.from !== "me") return;
+
+    setEditModal({
+      open: true,
+      cid: String(activeChatId),
+      msg,
+      text: String(msg.text || ""),
+      err: "",
+      busy: false,
+    });
+  };
+
+  const confirmEditMessage = async () => {
+    const cid = String(editModal.cid || "");
+    const msg = editModal.msg;
+    const mid = String(msg?.id || "");
+    const oldText = String(msg?.text || "");
+
+    const trimmed = String(editModal.text || "").trim();
+    if (!trimmed) {
+      setEditModal((s) => ({ ...s, err: "Không được để trống." }));
+      return;
+    }
+    if (!cid || !mid || editModal.busy) return;
+
+    setEditModal((s) => ({ ...s, busy: true, err: "" }));
+
+    // optimistic
+    patchMessage(cid, mid, {
+      text: trimmed,
+      editedAt: new Date().toISOString(),
+    });
+
+    try {
+      if (socket.connected) {
+        await new Promise((resolve, reject) => {
+          socket
+            .timeout(8000)
+            .emit(
+              "message:edit",
+              { conversationId: cid, messageId: mid, text: trimmed },
+              (err, res) => {
+                if (err) return reject(err);
+                if (!res?.ok)
+                  return reject(new Error(res?.error || "EDIT_FAILED"));
+                resolve(res);
+              }
+            );
+        });
+      } else {
+        await ChatAPI.editMessage(mid, { text: trimmed });
+      }
+
+      setEditModal({
+        open: false,
+        cid: null,
+        msg: null,
+        text: "",
+        err: "",
+        busy: false,
+      });
+    } catch (e) {
+      console.warn(e);
+      patchMessage(cid, mid, { text: oldText });
+      setEditModal((s) => ({ ...s, busy: false }));
+    }
+  };
+
+  const onRecallMessage = (messageId) => {
+    if (!activeChatId || !messageId) return;
+    setRecallModal({
+      open: true,
+      cid: String(activeChatId),
+      mid: String(messageId),
+      busy: false,
+    });
+  };
+
+  const confirmRecallMessage = async () => {
+    const cid = String(recallModal.cid || "");
+    const mid = String(recallModal.mid || "");
+    if (!cid || !mid || recallModal.busy) return;
+
+    setRecallModal((s) => ({ ...s, busy: true }));
+
+    // backup để revert nếu fail
+    const backup = (messagesByChatId[cid] ?? []).find(
+      (m) => String(m.id) === mid
+    );
+
+    // optimistic
+    patchMessage(cid, mid, {
+      text: "Đã thu hồi tin nhắn",
+      attachments: [],
+      reactions: [],
+      isRecalled: true,
+      recalledAt: new Date().toISOString(),
+    });
+
+    try {
+      if (socket.connected) {
+        await new Promise((resolve, reject) => {
+          socket
+            .timeout(8000)
+            .emit(
+              "message:recall",
+              { conversationId: cid, messageId: mid },
+              (err, res) => {
+                if (err) return reject(err);
+                if (!res?.ok)
+                  return reject(new Error(res?.error || "RECALL_FAILED"));
+                resolve(res);
+              }
+            );
+        });
+      } else {
+        await ChatAPI.recallMessage(mid);
+      }
+
+      setRecallModal({ open: false, cid: null, mid: null, busy: false });
+    } catch (e) {
+      console.warn(e);
+      if (backup) patchMessage(cid, mid, backup);
+      setRecallModal((s) => ({ ...s, busy: false }));
+    }
+  };
 
   const sortedFriends = useMemo(() => {
     const list = Array.isArray(friends) ? [...friends] : [];
@@ -252,6 +607,7 @@ export default function ChatPage() {
     rawAttachments = [],
     tmpId, // nếu retry thì truyền tmpId
     clientId, // nếu retry thì giữ clientId cũ
+    replyTo = null,
   }) => {
     const cid = String(conversationId);
     const safeText = String(text || "").trim();
@@ -288,6 +644,7 @@ export default function ChatPage() {
         text: safeText || "",
         attachments,
         clientId: cId,
+        replyTo: replyTo || null,
       };
 
       // 2) send (socket có ACK + timeout)
@@ -307,6 +664,7 @@ export default function ChatPage() {
       const res = await ChatAPI.sendMessage(cid, {
         text: payload.text,
         attachments: payload.attachments,
+        replyTo: payload.replyTo,
       });
       const m = res?.data?.message;
       if (m?.id || m?._id) {
@@ -410,7 +768,19 @@ export default function ChatPage() {
       time: formatTime(now),
       createdAt: now,
       status: "sending",
-      __retryPayload: { conversationId: cid, text },
+      __retryPayload: {
+        conversationId: cid,
+        text,
+        replyTo: replyDraft?.id || null,
+      },
+      replyTo: replyDraft
+        ? {
+            id: replyDraft.id,
+            sender: { name: replyDraft.name },
+            text: replyDraft.preview,
+          }
+        : null,
+      reactions: [],
     };
 
     setMessagesByChatId((prev) => {
@@ -426,7 +796,13 @@ export default function ChatPage() {
       }))
     );
 
-    sendWithRetry({ conversationId: cid, text, tmpId, clientId });
+    sendWithRetry({
+      conversationId: cid,
+      text,
+      tmpId,
+      clientId,
+      replyTo: replyDraft?.id || null,
+    });
   };
 
   // ===== SEND: text + files + giphy GIF (upload files first, GIF is URL-only) =====
@@ -458,7 +834,16 @@ export default function ChatPage() {
         files,
         gifAttachments,
         rawAttachments,
+        replyTo: replyDraft?.id || null,
       },
+      replyTo: replyDraft
+        ? {
+            id: replyDraft.id,
+            sender: { name: replyDraft.name },
+            text: replyDraft.preview,
+          }
+        : null,
+      reactions: [],
     };
 
     setMessagesByChatId((prev) => {
@@ -484,6 +869,7 @@ export default function ChatPage() {
       rawAttachments,
       tmpId,
       clientId,
+      replyTo: replyDraft?.id || null,
     });
   };
 
@@ -608,13 +994,25 @@ export default function ChatPage() {
           onRetryMessage={(msg) => {
             const p = msg?.__retryPayload;
             if (!p) return;
-            sendWithRetry({ ...p, tmpId: msg.id, clientId: msg.clientId });
+            sendWithRetry({
+              ...p,
+              tmpId: msg.id,
+              clientId: msg.clientId,
+              replyTo: p.replyTo ?? null,
+            });
           }}
           hasMore={hasMore}
           loadingMore={loadingMore}
           onLoadMore={loadMore}
           isSearchOpen={isSearchOpen}
           onToggleSearch={() => setIsSearchOpen((v) => !v)}
+          replyDraft={replyDraft}
+          onReplySelect={onReplySelect}
+          onClearReply={() => setReplyDraft(null)}
+          onReactMessage={onReactMessage}
+          onPinMessage={onPinMessage}
+          onEditMessage={onEditMessage}
+          onRecallMessage={onRecallMessage}
         />
 
         <GroupInfo
@@ -622,6 +1020,7 @@ export default function ChatPage() {
           groupInfo={groupInfo}
           open={infoOpen}
           onClose={() => setInfoOpen(false)}
+          onProfile={onProfile}
         />
 
         <SearchFriendModal
@@ -632,6 +1031,100 @@ export default function ChatPage() {
           onAccept={noti.acceptRequest}
           onReject={noti.rejectRequest}
         />
+
+        {recallModal.open && (
+          <div
+            className="fixed inset-0 z-[100] grid place-items-center bg-black/40 backdrop-blur-[1px] p-4"
+            onMouseDown={closeRecallModal}
+          >
+            <div
+              className="w-full max-w-md p-5 bg-white shadow-xl rounded-2xl ring-1 ring-black/5"
+              onMouseDown={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+            >
+              <p className="text-base font-semibold text-zinc-900">
+                Can I recall the message?
+              </p>
+              <p className="mt-1 text-sm text-zinc-600">
+                The message will be retracted for everyone in the conversation.
+              </p>
+
+              <div className="flex items-center justify-end gap-2 mt-5">
+                <button
+                  type="button"
+                  className="h-10 px-4 border cursor-pointer rounded-xl border-zinc-200 hover:bg-zinc-50 disabled:opacity-50"
+                  onClick={closeRecallModal}
+                  disabled={recallModal.busy}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  className="h-10 px-4 text-white cursor-pointer rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50"
+                  onClick={confirmRecallMessage}
+                  disabled={recallModal.busy}
+                >
+                  Recall
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {editModal.open && (
+          <div
+            className="fixed inset-0 z-[100] grid place-items-center bg-black/40 backdrop-blur-[1px] p-4"
+            onMouseDown={closeEditModal}
+          >
+            <div
+              className="w-full max-w-md p-5 bg-white shadow-xl rounded-2xl ring-1 ring-black/5"
+              onMouseDown={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+            >
+              <p className="text-base font-semibold text-zinc-900">
+                Edit message
+              </p>
+
+              <textarea
+                className="w-full mt-3 px-3 py-2 text-sm bg-zinc-50 border border-zinc-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-300 min-h-[110px] resize-none"
+                value={editModal.text}
+                onChange={(e) =>
+                  setEditModal((s) => ({ ...s, text: e.target.value, err: "" }))
+                }
+                disabled={editModal.busy}
+              />
+
+              {editModal.err ? (
+                <div className="mt-2 text-sm text-rose-600">
+                  {editModal.err}
+                </div>
+              ) : null}
+
+              <div className="flex items-center justify-end gap-2 mt-5">
+                <button
+                  type="button"
+                  className="h-10 px-4 border cursor-pointer rounded-xl border-zinc-200 hover:bg-zinc-50 disabled:opacity-50"
+                  onClick={closeEditModal}
+                  disabled={editModal.busy}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  className="h-10 px-4 text-white cursor-pointer rounded-xl bg-violet-600 hover:bg-violet-700 disabled:opacity-50"
+                  onClick={confirmEditMessage}
+                  disabled={editModal.busy}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {deleteModal.open && (
           <div

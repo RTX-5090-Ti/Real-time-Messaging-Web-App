@@ -6,7 +6,8 @@ export const ChatAPI = {
   createOrGetDirect: (otherUserId) =>
     api.post("/conversations/direct", { otherUserId }),
   listConversations: () => api.get("/conversations"),
-    deleteConversation: (conversationId) => api.delete(`/conversations/${conversationId}`),
+  deleteConversation: (conversationId) =>
+    api.delete(`/conversations/${conversationId}`),
   getMessages(conversationId, params = {}) {
     return api.get("/messages", {
       params: { conversationId, ...params },
@@ -52,4 +53,8 @@ export const ChatAPI = {
   markAllNotificationsRead: () => api.post("/notifications/read-all"),
 
   searchUserByEmail: (email) => api.get("/users/search", { params: { email } }),
+
+  editMessage: (messageId, body) => api.patch(`/messages/${messageId}`, body),
+  recallMessage: (messageId) => api.post(`/messages/${messageId}/recall`),
+  togglePinMessage: (messageId) => api.post(`/messages/${messageId}/pin`),
 };

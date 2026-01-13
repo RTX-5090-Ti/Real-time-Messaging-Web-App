@@ -68,6 +68,8 @@ export function useChatSocket({
         attachments,
         time: formatTime(createdAt),
         createdAt,
+        replyTo: payload.replyTo || null,
+        reactions: Array.isArray(payload.reactions) ? payload.reactions : [],
       };
 
       const cid = String(conversationId);
@@ -206,6 +208,92 @@ export function useChatSocket({
       }
     };
 
+    const onMessageReaction = (payload = {}) => {
+      const cid = String(payload.conversationId || "");
+      const mid = String(payload.messageId || "");
+      if (!cid || !mid) return;
+
+      const reactions = Array.isArray(payload.reactions)
+        ? payload.reactions
+        : [];
+
+      setMessagesByChatId((prev) => {
+        const list = prev[cid] ?? [];
+        const idx = list.findIndex((m) => String(m.id) === mid);
+        if (idx === -1) return prev;
+
+        const next = [...list];
+        next[idx] = { ...next[idx], reactions };
+        return { ...prev, [cid]: next };
+      });
+    };
+
+    const onMessageEdited = (payload = {}) => {
+      const cid = String(payload.conversationId || "");
+      const mid = String(payload.messageId || "");
+      if (!cid || !mid) return;
+
+      setMessagesByChatId((prev) => {
+        const list = prev[cid] ?? [];
+        const idx = list.findIndex((m) => String(m.id) === mid);
+        if (idx === -1) return prev;
+
+        const next = [...list];
+        next[idx] = {
+          ...next[idx],
+          text: payload.text ?? next[idx].text,
+          editedAt: payload.editedAt,
+        };
+        return { ...prev, [cid]: next };
+      });
+    };
+
+    const onMessageRecalled = (payload = {}) => {
+      const cid = String(payload.conversationId || "");
+      const mid = String(payload.messageId || "");
+      if (!cid || !mid) return;
+
+      setMessagesByChatId((prev) => {
+        const list = prev[cid] ?? [];
+        const idx = list.findIndex((m) => String(m.id) === mid);
+        if (idx === -1) return prev;
+
+        const next = [...list];
+        next[idx] = {
+          ...next[idx],
+          text: payload.text ?? "Đã thu hồi tin nhắn",
+          attachments: Array.isArray(payload.attachments)
+            ? payload.attachments
+            : [],
+          reactions: Array.isArray(payload.reactions) ? payload.reactions : [],
+          isRecalled: true,
+          recalledAt: payload.recalledAt,
+        };
+        return { ...prev, [cid]: next };
+      });
+    };
+
+    const onMessagePinned = (payload = {}) => {
+      const cid = String(payload.conversationId || "");
+      const mid = String(payload.messageId || "");
+      if (!cid || !mid) return;
+
+      setMessagesByChatId((prev) => {
+        const list = prev[cid] ?? [];
+        const idx = list.findIndex((m) => String(m.id) === mid);
+        if (idx === -1) return prev;
+
+        const next = [...list];
+        next[idx] = {
+          ...next[idx],
+          pinned: !!payload.pinned,
+          pinnedAt: payload.pinnedAt,
+          pinnedBy: payload.pinnedBy,
+        };
+        return { ...prev, [cid]: next };
+      });
+    };
+
     const onNotification = (payload) => {
       if (typeof onNotificationNew === "function") onNotificationNew(payload);
     };
@@ -219,6 +307,12 @@ export function useChatSocket({
     socket.on("conversation:read", onConversationRead);
     socket.on("notification:new", onNotification);
 
+    socket.on("message:reaction", onMessageReaction);
+
+    socket.on("message:edited", onMessageEdited);
+    socket.on("message:recalled", onMessageRecalled);
+    socket.on("message:pinned", onMessagePinned);
+
     if (!socket.connected) socket.connect();
 
     return () => {
@@ -229,6 +323,11 @@ export function useChatSocket({
       socket.off("typing:update", onTypingUpdate);
       socket.off("conversation:read", onConversationRead);
       socket.off("notification:new", onNotification);
+      socket.off("message:reaction", onMessageReaction);
+
+      socket.off("message:edited", onMessageEdited);
+      socket.off("message:recalled", onMessageRecalled);
+      socket.off("message:pinned", onMessagePinned);
     };
   }, [
     meId,

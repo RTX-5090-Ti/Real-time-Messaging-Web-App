@@ -13,6 +13,9 @@ export default function Composer({
   attachWrapRef,
   fileInputRef,
 
+  replyDraft,
+  onCancelReply,
+
   // state
   text,
   setText,
@@ -161,6 +164,27 @@ export default function Composer({
             <div className="p-3 border-b border-zinc-200">
               <div className="flex items-center gap-2">
                 <div className="flex-1">
+                  {replyDraft ? (
+                    <div className="flex items-center gap-2 px-3 py-2 mb-2 border rounded-xl border-violet-100 bg-violet-50">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] font-semibold text-violet-700">
+                          Replying to {replyDraft.name}
+                        </div>
+                        <div className="text-xs truncate text-violet-700/90">
+                          {replyDraft.preview}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onCancelReply?.()}
+                        className="grid w-8 h-8 rounded-lg place-items-center hover:bg-white/60"
+                        title="Cancel reply"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : null}
+
                   <input
                     value={gifQuery}
                     onChange={(e) => setGifQuery(e.target.value)}
@@ -291,6 +315,31 @@ export default function Composer({
                   </div>
                 );
               })}
+            </div>
+          ) : null}
+
+          {replyDraft ? (
+            <div className="flex items-center justify-between gap-2 px-3 py-2 mb-2 text-sm bg-white border rounded-xl border-zinc-200">
+              <div className="min-w-0">
+                <div className="text-[12px] text-zinc-500">
+                  Reply to{" "}
+                  <span className="font-medium text-zinc-700">
+                    {replyDraft.name}
+                  </span>
+                </div>
+                <div className="truncate text-zinc-700">
+                  {replyDraft.preview}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onCancelReply?.()}
+                className="grid rounded-lg h-7 w-7 place-items-center hover:bg-zinc-100"
+                title="Cancel reply"
+              >
+                ✕
+              </button>
             </div>
           ) : null}
 

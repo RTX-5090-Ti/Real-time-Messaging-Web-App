@@ -19,6 +19,21 @@ export function useChatBootstrap({ navigate }) {
   const [onlineIds, setOnlineIds] = useState([]);
   const onlineSet = useMemo(() => new Set(onlineIds.map(String)), [onlineIds]);
 
+  // ✅ Sync friend status with live presence (avoid needing F5)
+  useEffect(() => {
+    setFriends((prev) =>
+      (prev || []).map((f) => {
+        const nextStatus = onlineSet.has(String(f.id)) ? "online" : "offline";
+
+        // Nếu mày sau này có thêm status khác (blocked, pending...) thì giữ nguyên
+        if (f?.status && f.status !== "online" && f.status !== "offline")
+          return f;
+
+        return f.status === nextStatus ? f : { ...f, status: nextStatus };
+      })
+    );
+  }, [onlineSet]);
+
   const onlineIdsRef = useRef([]);
   useEffect(() => {
     onlineIdsRef.current = onlineIds;
