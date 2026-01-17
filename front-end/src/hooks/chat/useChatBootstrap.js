@@ -19,19 +19,25 @@ export function useChatBootstrap({ navigate }) {
   const [onlineIds, setOnlineIds] = useState([]);
   const onlineSet = useMemo(() => new Set(onlineIds.map(String)), [onlineIds]);
 
-  // ✅ Sync friend status with live presence (avoid needing F5)
+  //  Sync friend status with live presence (avoid needing F5)
   useEffect(() => {
-    setFriends((prev) =>
-      (prev || []).map((f) => {
+    setFriends((prev) => {
+      let changed = false;
+
+      const next = (prev || []).map((f) => {
         const nextStatus = onlineSet.has(String(f.id)) ? "online" : "offline";
 
-        // Nếu mày sau này có thêm status khác (blocked, pending...) thì giữ nguyên
         if (f?.status && f.status !== "online" && f.status !== "offline")
           return f;
 
-        return f.status === nextStatus ? f : { ...f, status: nextStatus };
-      })
-    );
+        if (f.status === nextStatus) return f;
+
+        changed = true;
+        return { ...f, status: nextStatus };
+      });
+
+      return changed ? next : prev;
+    });
   }, [onlineSet]);
 
   const onlineIdsRef = useRef([]);
@@ -80,9 +86,13 @@ export function useChatBootstrap({ navigate }) {
         const meUI = {
           id: meData.id,
           name: meData.name,
-          avatar: avatarFromName(meData.name),
+          avatar: meData.avatarUrl || avatarFromName(meData.name),
           role: meData.role,
           email: meData.email,
+
+          // profile
+          gender: meData.gender || "",
+          dob: meData.dob || "",
         };
         setMe(meUI);
 

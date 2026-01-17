@@ -14,7 +14,9 @@ export async function authSocket(socket, next) {
     if (!token) return next(new Error("No token"));
 
     const decoded = verifyToken(token);
-    const user = await User.findById(decoded.sub).select("_id name email role"); //decoded.sub = userId
+    const user = await User.findById(decoded.sub).select(
+      "_id name email role avatar"
+    ); //decoded.sub = userId
     if (!user) return next(new Error("User not found"));
 
     // Gắn user vào Socket
@@ -22,6 +24,7 @@ export async function authSocket(socket, next) {
       id: user._id.toString(),
       name: user.name,
       role: user.role,
+      avatarUrl: user.avatar?.url || null,
     };
 
     next();

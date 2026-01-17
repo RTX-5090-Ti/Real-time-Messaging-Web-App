@@ -78,7 +78,7 @@ export function MessageBubble({
     <div className="flex w-full">
       {!mine ? (
         <img
-          src={msg.avatar}
+          src={msg.avatarUrl || msg.avatar}
           alt={msg.name}
           className="object-cover mt-1 mr-3 rounded-full w-9 h-9 shrink-0"
         />

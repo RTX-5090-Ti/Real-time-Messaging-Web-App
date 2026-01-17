@@ -19,6 +19,9 @@ import { useChatSocket } from "../hooks/chat/useChatSocket.js";
 import { useNotifications } from "../hooks/chat/useNotifications.js";
 import { useOpenChatWithFriend } from "../hooks/chat/useOpenChatWithFriend.js";
 
+import ProfileModal from "../components/chat/ProfileModal.jsx";
+import UserProfileModal from "../components/chat/UserProfileModal.jsx";
+
 export default function ChatPage() {
   const navigate = useNavigate();
 
@@ -51,6 +54,24 @@ export default function ChatPage() {
     busy: false,
   });
 
+  const [profileOpen, setProfileOpen] = useState(false);
+
+  const [otherProfile, setOtherProfile] = useState({
+    open: false,
+    userId: null,
+    seedUser: null,
+  });
+
+  const openOtherProfile = (userId, seedUser = null) => {
+    const id = String(userId || "");
+    if (!id) return;
+    setOtherProfile({ open: true, userId: id, seedUser });
+  };
+
+  const closeOtherProfile = () => {
+    setOtherProfile({ open: false, userId: null, seedUser: null });
+  };
+
   const closeRecallModal = () => {
     setRecallModal((s) =>
       s.busy ? s : { open: false, cid: null, mid: null, busy: false }
@@ -68,7 +89,7 @@ export default function ChatPage() {
   // core states + bootstrap
   const {
     me,
-
+    setMe,
     chats,
     setChats,
     friends,
@@ -99,6 +120,7 @@ export default function ChatPage() {
     chats,
     setChats,
     socket,
+    setFriends,
     setMessagesByChatId,
     setOnlineIds,
     activeChatIdRef,
@@ -670,12 +692,16 @@ export default function ChatPage() {
       if (m?.id || m?._id) {
         // map về format UI giống useChatHistory/useChatSocket
         const sender = m.sender || m.senderId || {};
+        const senderName = sender.name ?? me?.name ?? "User";
+        const senderAvatarUrl =
+          sender.avatarUrl ?? sender.avatar?.url ?? sender.avatar ?? null;
         const createdAt = m.createdAt || new Date().toISOString();
         const uiMsg = {
           id: String(m.id ?? m._id),
           from: String(sender.id) === String(me?.id) ? "me" : "other",
-          name: sender.name ?? me?.name ?? "User",
-          avatar: avatarFromName(sender.name ?? me?.name ?? "User"),
+          name: senderName,
+          avatarUrl: senderAvatarUrl,
+          avatar: senderAvatarUrl || avatarFromName(senderName),
           text: m.text ?? "",
           attachments: Array.isArray(m.attachments) ? m.attachments : [],
           time: formatTime(createdAt),
@@ -762,7 +788,8 @@ export default function ChatPage() {
       clientId,
       from: "me",
       name: me?.name || "Me",
-      avatar: me?.avatar || avatarFromName(me?.name || "Me"),
+      avatarUrl: me?.avatarUrl || null,
+      avatar: me?.avatarUrl || me?.avatar || avatarFromName(me?.name || "Me"),
       text,
       attachments: [],
       time: formatTime(now),
@@ -895,7 +922,7 @@ export default function ChatPage() {
     navigate("/auth", { replace: true });
   };
 
-  const onProfile = () => alert("(Demo UI) Profile");
+  const onProfile = () => setProfileOpen(true);
   const onCreateGroup = () => alert("Group chat: not implemented yet.");
 
   if (!me) {
@@ -951,6 +978,20 @@ export default function ChatPage() {
           onRejectRequest={(requestId) => noti.rejectRequest(requestId)}
           onClearAllNotifications={() => noti.clearAll()}
           onDeleteChat={openDeleteModal}
+          onViewProfile={(chat) => {
+            const otherId =
+              chat?.otherUserId ||
+              chat?._raw?.members?.find?.(
+                (m) => String(m.id) !== String(me?.id)
+              )?.id;
+
+            const seed = chat?._raw?.members?.find?.(
+              (m) => String(m.id) === String(otherId)
+            );
+
+            openOtherProfile(otherId, seed);
+          }}
+          onReport={(chat) => console.log("Report chat", chat)}
         />
 
         <ChatWindow
@@ -1021,6 +1062,13 @@ export default function ChatPage() {
           open={infoOpen}
           onClose={() => setInfoOpen(false)}
           onProfile={onProfile}
+          onOpenProfile={() => {
+            const otherId = activeChat?.otherUserId;
+            const seed = activeChat?._raw?.members?.find?.(
+              (m) => String(m.id) === String(otherId)
+            );
+            openOtherProfile(otherId, seed);
+          }}
         />
 
         <SearchFriendModal
@@ -1190,6 +1238,20 @@ export default function ChatPage() {
             </div>
           </div>
         )}
+
+        <ProfileModal
+          open={profileOpen}
+          onClose={() => setProfileOpen(false)}
+          me={me}
+          setMe={setMe}
+        />
+
+        <UserProfileModal
+          open={otherProfile.open}
+          onClose={closeOtherProfile}
+          userId={otherProfile.userId}
+          seedUser={otherProfile.seedUser}
+        />
       </div>
     </div>
   );

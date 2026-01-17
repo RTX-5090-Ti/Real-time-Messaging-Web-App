@@ -35,8 +35,8 @@ export function useNotifications({ me, onlineSet, setFriends }) {
       id: String(u.id),
       name: u.name,
       email: u.email,
-      role: u.role,
-      avatar: avatarFromName(u.name),
+      avatarUrl: u.avatarUrl || null,
+      avatar: u.avatarUrl || avatarFromName(u.name),
       status: onlineSet.has(String(u.id)) ? "online" : "offline",
     }));
     setFriends(list);

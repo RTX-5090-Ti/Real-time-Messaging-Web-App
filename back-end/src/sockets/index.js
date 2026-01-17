@@ -54,6 +54,10 @@ export function initSocket(io) {
     // Thông báo người này đanh online
     socket.broadcast.emit("presence:update", { userId, online: true });
 
+    socket.on("presence:sync", () => {
+      socket.emit("presence:state", { onlineUserIds: getOnlineUserIds() });
+    });
+
     // join vào 1 conversation
     socket.on("conversation:join", async (conversationId) => {
       if (!mongoose.Types.ObjectId.isValid(conversationId)) return;
@@ -115,6 +119,8 @@ export function initSocket(io) {
         io.to(`user:${mid}`).emit("conversation:read", {
           conversationId: cid,
           userId,
+          name: socket.user.name,
+          avatarUrl: socket.user.avatarUrl || null,
           at: readAt,
         });
       }
@@ -136,6 +142,7 @@ export function initSocket(io) {
         conversationId,
         userId,
         name: socket.user.name,
+        avatarUrl: socket.user.avatarUrl || null,
         typing: true,
       });
     });
@@ -155,6 +162,7 @@ export function initSocket(io) {
         conversationId,
         userId,
         name: socket.user.name,
+        avatarUrl: socket.user.avatarUrl || null,
         typing: false,
       });
     });
@@ -434,7 +442,7 @@ export function initSocket(io) {
           if (!mongoose.Types.ObjectId.isValid(replyTo)) return;
           replyMsg = await Message.findById(replyTo)
             .select("_id text senderId attachments createdAt conversationId")
-            .populate("senderId", "_id name");
+            .populate("senderId", "_id name avatar");
           if (
             !replyMsg ||
             String(replyMsg.conversationId) !== String(conversationId)
@@ -454,7 +462,7 @@ export function initSocket(io) {
           await msg.populate({
             path: "replyTo",
             select: "_id text senderId attachments createdAt",
-            populate: { path: "senderId", select: "_id name" },
+            populate: { path: "senderId", select: "_id name avatar" },
           });
         }
 
@@ -496,6 +504,7 @@ export function initSocket(io) {
                   ? {
                       id: msg.replyTo.senderId._id,
                       name: msg.replyTo.senderId.name,
+                      avatarUrl: msg.replyTo.senderId.avatar?.url || null,
                     }
                   : null,
                 createdAt: msg.replyTo.createdAt,
@@ -522,6 +531,7 @@ export function initSocket(io) {
           sender: {
             id: socket.user.id,
             name: socket.user.name,
+            avatarUrl: socket.user.avatarUrl || null,
           },
           createdAt: msg.createdAt,
           clientId: clientId || null,
@@ -539,26 +549,31 @@ export function initSocket(io) {
         try {
           const room = io.sockets.adapter.rooms.get(conversationId);
           if (room) {
-            const viewers = new Set(); // userIds currently viewing this conversation
+            const viewers = new Map(); // userIds currently viewing this conversation
             for (const sid of room) {
               const s = io.sockets.sockets.get(sid);
               const uid = s?.user?.id;
               if (!uid) continue;
               if (String(uid) === String(userId)) continue; // skip sender
-              viewers.add(String(uid));
+              viewers.set(String(uid), {
+                name: s?.user?.name || "",
+                avatarUrl: s?.user?.avatarUrl || null,
+              });
             }
 
             if (viewers.size > 0) {
               const at = msg.createdAt;
 
               // update lastReadAt for viewers
-              for (const uid of viewers) {
+              for (const [uid, info] of viewers) {
                 upsertLastRead(convo, new mongoose.Types.ObjectId(uid), at);
 
                 // notify sender even if sender is not in the conversation room
                 io.to(`user:${userId}`).emit("conversation:read", {
                   conversationId,
                   userId: uid, // the viewer who read it
+                  name: info?.name || "",
+                  avatarUrl: info?.avatarUrl || null,
                   at,
                 });
               }
@@ -575,6 +590,7 @@ export function initSocket(io) {
           conversationId,
           userId,
           name: socket.user.name,
+          avatarUrl: socket.user.avatarUrl || null,
           typing: false,
         });
       }

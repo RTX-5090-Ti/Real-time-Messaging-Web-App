@@ -74,6 +74,7 @@ export default function NotificationsDropdown({
                 const name = actor?.name || "User";
                 const email = actor?.email || "";
                 const avatar =
+                  actor?.avatarUrl ||
                   actor?.avatar ||
                   `data:image/svg+xml,${avatarFromNameLocal(name)}`;
 

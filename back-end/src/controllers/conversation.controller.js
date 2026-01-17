@@ -65,7 +65,7 @@ export async function createOrGetDirect(req, res) {
     });
   }
 
-    // nếu trước đó user đã "delete chat" thì tạo/get direct sẽ hiện lại
+  // nếu trước đó user đã "delete chat" thì tạo/get direct sẽ hiện lại
   try {
     await Conversation.updateOne(
       { _id: convo._id },
@@ -97,9 +97,12 @@ export async function createOrGetDirect(req, res) {
 export async function listMyConversations(req, res) {
   const myId = req.user.id;
 
-  const convos = await Conversation.find({ members: myId, hiddenFor: { $ne: myId } })
+  const convos = await Conversation.find({
+    members: myId,
+    hiddenFor: { $ne: myId },
+  })
     .sort({ updatedAt: -1 })
-    .populate("members", "_id name email role"); // lấy infor user cho members
+    .populate("members", "_id name email role avatar"); // lấy infor user cho members
 
   const myObjectId = new mongoose.Types.ObjectId(myId);
 
@@ -118,13 +121,18 @@ export async function listMyConversations(req, res) {
 
       const lastMsg = await Message.findOne(lastMsgQuery)
         .sort({ createdAt: -1 })
-        .populate("senderId", "_id name");
+        .populate("senderId", "_id name avatar");
 
       const lastReadAt = myP?.lastReadAt ?? null;
       // unread should count only after the later of (lastReadAt, clearedAt)
       const unreadAfter =
         lastReadAt && clearedAt
-          ? new Date(Math.max(new Date(lastReadAt).getTime(), new Date(clearedAt).getTime()))
+          ? new Date(
+              Math.max(
+                new Date(lastReadAt).getTime(),
+                new Date(clearedAt).getTime()
+              )
+            )
           : lastReadAt || clearedAt || null;
 
       const unreadQuery = {
@@ -144,7 +152,11 @@ export async function listMyConversations(req, res) {
               id: lastMsg._id,
               text: lastMsg.text,
               sender: lastMsg.senderId
-                ? { id: lastMsg.senderId._id, name: lastMsg.senderId.name }
+                ? {
+                    id: lastMsg.senderId._id,
+                    name: lastMsg.senderId.name,
+                    avatarUrl: lastMsg.senderId.avatar?.url || null,
+                  }
                 : null,
               createdAt: lastMsg.createdAt,
             }
@@ -155,6 +167,7 @@ export async function listMyConversations(req, res) {
           name: m.name,
           email: m.email,
           role: m.role,
+          avatarUrl: m.avatar?.url || null,
         })),
         updatedAt: c.updatedAt,
       };
@@ -164,7 +177,6 @@ export async function listMyConversations(req, res) {
   res.json({ conversations: data });
 }
 // Đã update
-
 
 // Delete chat (ẩn conversation với riêng mình)
 export async function deleteConversationForMe(req, res) {
@@ -176,7 +188,8 @@ export async function deleteConversationForMe(req, res) {
   }
 
   const convo = await Conversation.findOne({ _id: id, members: myId });
-  if (!convo) return res.status(404).json({ message: "Conversation không tồn tại" });
+  if (!convo)
+    return res.status(404).json({ message: "Conversation không tồn tại" });
 
   const now = new Date();
 
@@ -204,7 +217,13 @@ export async function deleteConversationForMe(req, res) {
         { _id: id },
         {
           $addToSet: { hiddenFor: myObjectId },
-          $push: { participants: { userId: myObjectId, lastReadAt: now, clearedAt: now } },
+          $push: {
+            participants: {
+              userId: myObjectId,
+              lastReadAt: now,
+              clearedAt: now,
+            },
+          },
         }
       );
     } catch (e) {}

@@ -333,6 +333,7 @@ export default function Sidebar({
     <aside className="w-[400px] shrink-0 border-r border-zinc-200 bg-white flex">
       {/* LEFT NAV */}
       <div className="w-[92px] bg-zinc-900 text-white flex flex-col items-center py-4 gap-3">
+        {/* Nút nhấn avatar view Profile */}
         <button
           onClick={onProfile}
           className=" w-12 h-12 rounded-full overflow-hidden cursor-pointer transition outline-none focus:outline-none focus:ring-0  hover:bg-white/10 hover:shadow-[0_0_0_3px_rgba(255,255,255,0.25)]"
@@ -400,6 +401,7 @@ export default function Sidebar({
         </div>
 
         <div className="w-full px-3 mt-auto space-y-2">
+          {/* Nút nhấn "Profile" mở profile */}
           <NavButton
             active={false}
             label="Profile"
@@ -631,7 +633,7 @@ export default function Sidebar({
                   >
                     <div className="relative">
                       <img
-                        src={f.avatar}
+                        src={f.avatarUrl || f.avatar}
                         alt={f.name}
                         className="object-cover w-11 h-11 rounded-2xl"
                       />

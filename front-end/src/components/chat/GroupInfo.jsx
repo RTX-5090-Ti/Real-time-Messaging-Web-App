@@ -1,4 +1,7 @@
 import React, { useMemo, useState } from "react";
+import ImageLightboxModal from "./ImageLightboxModal.jsx";
+
+const isGifUrl = (url) => /\.(gif)(\?|$)/i.test(String(url || ""));
 
 function Section({ title, right, open, onToggle, children }) {
   return (
@@ -31,7 +34,7 @@ function Section({ title, right, open, onToggle, children }) {
   );
 }
 
-function MediaGrid({ items }) {
+function MediaGrid({ items, onOpenImage }) {
   if (!items?.length) {
     return (
       <div className="px-3 py-3 text-sm border rounded-2xl border-zinc-200 bg-zinc-50 text-zinc-500">
@@ -44,13 +47,18 @@ function MediaGrid({ items }) {
     <div className="grid grid-cols-3 gap-2 pt-3">
       {items.map((it) => {
         const isVideo = it.kind === "video";
+        const isGif = it.kind === "gif" || isGifUrl(it.url);
+        const canLightbox = !isVideo && !isGif;
         return (
           <button
             key={it.key}
             type="button"
             className="relative overflow-hidden border cursor-pointer rounded-xl border-zinc-200 bg-zinc-50 hover:opacity-95"
             title={isVideo ? "Open video" : "Open image"}
-            onClick={() => window.open(it.url, "_blank", "noopener,noreferrer")}
+            onClick={() => {
+              if (canLightbox) onOpenImage?.(it.url);
+              else window.open(it.url, "_blank", "noopener,noreferrer");
+            }}
           >
             <div className="aspect-square">
               {isVideo ? (
@@ -120,7 +128,13 @@ function FileList({ items }) {
   );
 }
 
-export default function GroupInfo({ chat, groupInfo, open, onClose }) {
+export default function GroupInfo({
+  chat,
+  groupInfo,
+  open,
+  onClose,
+  onOpenProfile,
+}) {
   const [mediaOpen, setMediaOpen] = useState(true);
   const [fileOpen, setFileOpen] = useState(true);
   const [showAllMedia, setShowAllMedia] = useState(false);
@@ -132,6 +146,8 @@ export default function GroupInfo({ chat, groupInfo, open, onClose }) {
   const mediaItems = groupInfo?.mediaItems || [];
   const mediaAll = groupInfo?.mediaAll || mediaItems;
   const fileItems = groupInfo?.fileItems || [];
+
+  const [lightboxSrc, setLightboxSrc] = useState(null);
 
   const mediaRight = useMemo(() => {
     const total = Number(counts.mediaTotal ?? mediaItems.length) || 0;
@@ -178,7 +194,8 @@ export default function GroupInfo({ chat, groupInfo, open, onClose }) {
             <div className="flex flex-col items-center gap-3">
               <button
                 type="button"
-                onClick={() => {}}
+                // Chỗ này
+                onClick={() => onOpenProfile?.()}
                 className="w-20 h-20 rounded-full overflow-hidden cursor-pointer transition outline-none focus:outline-none focus:ring-0 hover:bg-zinc-50 hover:shadow-[0_0_0_3px_rgba(0,0,0,0.08)]"
                 title="Open profile"
               >
@@ -212,7 +229,10 @@ export default function GroupInfo({ chat, groupInfo, open, onClose }) {
                   showAllMedia ? "max-h-[320px] overflow-y-auto pr-1" : ""
                 }
               >
-                <MediaGrid items={showAllMedia ? mediaAll : mediaItems} />
+                <MediaGrid
+                  items={showAllMedia ? mediaAll : mediaItems}
+                  onOpenImage={(url) => setLightboxSrc(url)}
+                />
               </div>
 
               <button
@@ -271,7 +291,8 @@ export default function GroupInfo({ chat, groupInfo, open, onClose }) {
             <div className="flex flex-col items-center gap-3">
               <button
                 type="button"
-                onClick={() => {}}
+                // Chỗ này
+                onClick={() => onOpenProfile?.()}
                 className="w-20 h-20 rounded-full overflow-hidden cursor-pointer transition outline-none focus:outline-none focus:ring-0 hover:bg-zinc-50 hover:shadow-[0_0_0_3px_rgba(0,0,0,0.08)]"
                 title="Open profile"
               >
@@ -294,7 +315,7 @@ export default function GroupInfo({ chat, groupInfo, open, onClose }) {
             </div>
 
             <Section
-              title="Ảnh / Video"
+              title="Pictures / Video"
               right={mediaRight}
               open={mediaOpen}
               onToggle={() => setMediaOpen((v) => !v)}
@@ -304,7 +325,10 @@ export default function GroupInfo({ chat, groupInfo, open, onClose }) {
                   showAllMedia ? "max-h-[320px] overflow-y-auto pr-1" : ""
                 }
               >
-                <MediaGrid items={showAllMedia ? mediaAll : mediaItems} />
+                <MediaGrid
+                  items={showAllMedia ? mediaAll : mediaItems}
+                  onOpenImage={(url) => setLightboxSrc(url)}
+                />
               </div>
 
               <button
@@ -328,6 +352,12 @@ export default function GroupInfo({ chat, groupInfo, open, onClose }) {
           </div>
         </div>
       </aside>
+
+      <ImageLightboxModal
+        open={!!lightboxSrc}
+        src={lightboxSrc}
+        onClose={() => setLightboxSrc(null)}
+      />
     </>
   );
 }

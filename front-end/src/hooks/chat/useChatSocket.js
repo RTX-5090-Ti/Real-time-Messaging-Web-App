@@ -6,6 +6,8 @@ import { avatarFromName, formatTime } from "../../utils/chatUi.js";
 export function useChatSocket({
   meId,
   setChats,
+  setMe,
+  setFriends,
   setMessagesByChatId,
   setOnlineIds,
   activeChatIdRef,
@@ -16,6 +18,17 @@ export function useChatSocket({
   const [lastReadByConvo, setLastReadByConvo] = useState({});
 
   const processedMsgIdsRef = useRef(new Set());
+  const didSyncPresenceRef = useRef(false);
+
+  const onNotificationNewRef = useRef(onNotificationNew);
+  useEffect(() => {
+    onNotificationNewRef.current = onNotificationNew;
+  }, [onNotificationNew]);
+
+  const reloadConversationsRef = useRef(reloadConversations);
+  useEffect(() => {
+    reloadConversationsRef.current = reloadConversations;
+  }, [reloadConversations]);
 
   const previewTextFromAttachments = (attachments) => {
     if (!Array.isArray(attachments) || attachments.length === 0) return "";
@@ -62,8 +75,10 @@ export function useChatSocket({
       const uiMsg = {
         id: String(payload.id ?? payload._id),
         from: senderId === String(meId) ? "me" : "other",
+        senderId,
         name: senderName,
-        avatar: avatarFromName(senderName),
+        avatarUrl: sender?.avatarUrl || null,
+        avatar: sender?.avatarUrl || avatarFromName(senderName),
         text: payload.text ?? "",
         attachments,
         time: formatTime(createdAt),
@@ -124,9 +139,9 @@ export function useChatSocket({
         const cid = String(conversationId);
 
         if (!prev.some((c) => String(c.id) === cid)) {
-          if (typeof reloadConversations === "function") {
-            reloadConversations(String(meId)).catch(() => {});
-          }
+          const fn = reloadConversationsRef.current;
+          if (typeof fn === "function") fn(String(meId)).catch(() => {});
+
           return prev;
         }
 
@@ -145,18 +160,32 @@ export function useChatSocket({
       });
     };
 
+    const normIds = (arr) =>
+      Array.from(new Set((arr || []).map((x) => String(x)))).sort();
+
+    const sameArr = (a, b) =>
+      a.length === b.length && a.every((v, i) => v === b[i]);
+
     const onPresenceState = (payload) => {
-      const ids = payload?.onlineUserIds ?? [];
-      if (!Array.isArray(ids)) return;
-      setOnlineIds(ids.map(String));
+      const next = normIds(payload?.onlineUserIds);
+      setOnlineIds((prev) => {
+        const cur = normIds(prev);
+        return sameArr(cur, next) ? prev : next;
+      });
     };
 
     const onPresenceUpdate = ({ userId, online }) => {
       const uid = String(userId);
       setOnlineIds((prev) => {
         const set = new Set((prev || []).map(String));
+        const had = set.has(uid);
+
         if (online) set.add(uid);
         else set.delete(uid);
+
+        const hasNow = set.has(uid);
+        if (had === hasNow) return prev; // không đổi thì khỏi set
+
         return Array.from(set);
       });
     };
@@ -177,6 +206,84 @@ export function useChatSocket({
         else next[cid] = cur;
         return next;
       });
+    };
+
+    const onUserAvatar = ({ userId, avatarUrl } = {}) => {
+      const uid = userId ? String(userId) : "";
+      if (!uid) return;
+
+      // 0) nếu là chính mình và parent có setMe
+      if (String(uid) === String(meId) && typeof setMe === "function") {
+        setMe((prev) => {
+          if (!prev) return prev;
+          const nextAvatar = avatarUrl || avatarFromName(prev.name || "User");
+          return { ...prev, avatarUrl: avatarUrl || null, avatar: nextAvatar };
+        });
+      }
+      // 1) update friends list (list friend / search friend modal...)
+      if (typeof setFriends === "function") {
+        setFriends((prev) =>
+          prev.map((f) => {
+            if (String(f.id) !== uid) return f;
+            const nextAvatar = avatarUrl || avatarFromName(f.name || "User");
+            return { ...f, avatarUrl: avatarUrl || null, avatar: nextAvatar };
+          })
+        );
+      }
+
+      // 2) update avatar trong messages hiện có (để đoạn chat đổi avatar ngay)
+      setMessagesByChatId((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const cid of Object.keys(next)) {
+          const list = next[cid] || [];
+          const newList = list.map((m) => {
+            let mm = m;
+
+            // avatar của sender
+            if (String(m.senderId) === uid) {
+              const nextAvatar = avatarUrl || avatarFromName(m.name || "User");
+              if (
+                m.avatar !== nextAvatar ||
+                m.avatarUrl !== (avatarUrl || null)
+              ) {
+                mm = {
+                  ...mm,
+                  avatar: nextAvatar,
+                  avatarUrl: avatarUrl || null,
+                };
+                changed = true;
+              }
+            }
+
+            // avatar của replyTo.sender (nếu UI có render)
+            if (
+              mm.replyTo?.sender?.id &&
+              String(mm.replyTo.sender.id) === uid
+            ) {
+              mm = {
+                ...mm,
+                replyTo: {
+                  ...mm.replyTo,
+                  sender: {
+                    ...mm.replyTo.sender,
+                    avatarUrl: avatarUrl || null,
+                  },
+                },
+              };
+              changed = true;
+            }
+
+            return mm;
+          });
+          if (newList !== list) next[cid] = newList;
+        }
+        return changed ? next : prev;
+      });
+
+      // 3) reload conversations để sidebar/list cuộc trò chuyện + conversation info cập nhật avatar mới
+      if (typeof reloadConversations === "function")
+        reloadConversationsRef.current?.();
     };
 
     const onConversationRead = ({ conversationId, userId, at }) => {
@@ -201,10 +308,12 @@ export function useChatSocket({
       const cid = activeChatIdRef.current;
       if (cid) {
         socket.emit("conversation:join", String(cid));
-        // socket.emit("conversation:read", {
-        //   conversationId: String(cid),
-        //   at: new Date().toISOString(),
-        // });
+      }
+
+      // Fix StrictMode: xin snapshot online dù socket đã connect từ trước
+      if (!didSyncPresenceRef.current) {
+        didSyncPresenceRef.current = true;
+        socket.emit("presence:sync");
       }
     };
 
@@ -295,7 +404,8 @@ export function useChatSocket({
     };
 
     const onNotification = (payload) => {
-      if (typeof onNotificationNew === "function") onNotificationNew(payload);
+      const fn = onNotificationNewRef.current;
+      if (typeof fn === "function") fn(payload);
     };
 
     socket.on("connect", onConnect);
@@ -313,7 +423,13 @@ export function useChatSocket({
     socket.on("message:recalled", onMessageRecalled);
     socket.on("message:pinned", onMessagePinned);
 
-    if (!socket.connected) socket.connect();
+    socket.on("user:avatar", onUserAvatar);
+
+    if (socket.connected) {
+      onConnect(); // vì connect event sẽ không bắn lại trong case StrictMode
+    } else {
+      socket.connect();
+    }
 
     return () => {
       socket.off("connect", onConnect);
@@ -328,16 +444,12 @@ export function useChatSocket({
       socket.off("message:edited", onMessageEdited);
       socket.off("message:recalled", onMessageRecalled);
       socket.off("message:pinned", onMessagePinned);
+
+      socket.off("user:avatar", onUserAvatar);
+
+      didSyncPresenceRef.current = false;
     };
-  }, [
-    meId,
-    setChats,
-    setMessagesByChatId,
-    setOnlineIds,
-    activeChatIdRef,
-    onNotificationNew,
-    reloadConversations,
-  ]);
+  }, [meId, setChats, setMessagesByChatId, setOnlineIds]);
 
   return { typingByConvo, lastReadByConvo };
 }

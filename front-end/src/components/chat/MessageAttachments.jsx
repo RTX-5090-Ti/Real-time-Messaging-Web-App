@@ -1,4 +1,6 @@
-// src/components/chat/MessageAttachments.jsx
+import { useState } from "react";
+import ImageLightboxModal from "./ImageLightboxModal.jsx";
+
 export function MessageAttachments({
   mine,
   msgImage,
@@ -18,6 +20,10 @@ export function MessageAttachments({
     );
   };
 
+  const [lightboxSrc, setLightboxSrc] = useState(null);
+
+  const isGifUrl = (url) => /\.(gif)(\?|$)/i.test(String(url || ""));
+
   const prettySize = (n) => {
     const bytes = Number(n || 0);
     if (!bytes || Number.isNaN(bytes)) return "";
@@ -30,15 +36,36 @@ export function MessageAttachments({
   return (
     <>
       {/* older field */}
-      {msgImage ? (
+      {msgImage && !isGifUrl(msgImage) ? (
+        <button
+          type="button"
+          className="block"
+          onClick={() => setLightboxSrc(msgImage)}
+          title="View image"
+        >
+          <img
+            src={msgImage}
+            alt="attachment"
+            className={[
+              "max-w-[260px] rounded-2xl ring-1 ring-zinc-200 cursor-zoom-in",
+              mine ? "ring-white/10" : "ring-zinc-200",
+            ].join(" ")}
+            loading="lazy"
+            onLoad={() => onMediaLoad?.()}
+            onError={() => onMediaLoad?.()}
+          />
+        </button>
+      ) : msgImage ? (
+        // GIF giữ nguyên như cũ (mở tab mới)
         <a href={msgImage} target="_blank" rel="noreferrer" className="block">
           <img
             src={msgImage}
             alt="attachment"
             className={[
-              "mt-2 rounded-xl w-full h-auto max-h-[520px] object-contain cursor-zoom-in",
-              mine ? "bg-white/10" : "bg-zinc-100",
+              "max-w-[260px] rounded-2xl ring-1 ring-zinc-200",
+              mine ? "ring-white/10" : "ring-zinc-200",
             ].join(" ")}
+            loading="lazy"
             onLoad={() => onMediaLoad?.()}
             onError={() => onMediaLoad?.()}
           />
@@ -54,12 +81,46 @@ export function MessageAttachments({
 
             if (isImageAtt(a)) {
               const src = a?.preview || url;
+
+              const isGif =
+                String(a?.kind || "").toLowerCase() === "gif" ||
+                String(a?.mime || "").toLowerCase() === "image/gif" ||
+                isGifUrl(url);
+
+              if (!isGif) {
+                return (
+                  <button
+                    key={`${url}-${idx}`}
+                    type="button"
+                    className="block"
+                    onClick={() => setLightboxSrc(url)}
+                    title="View image"
+                  >
+                    <img
+                      src={src}
+                      alt={a?.name || "media"}
+                      className={[
+                        "max-w-[260px] rounded-2xl ring-1 ring-zinc-200 cursor-zoom-in",
+                        mine ? "ring-white/10" : "ring-zinc-200",
+                      ].join(" ")}
+                      loading="lazy"
+                      onLoad={() => onMediaLoad?.()}
+                      onError={() => onMediaLoad?.()}
+                    />
+                  </button>
+                );
+              }
+
+              // GIF: giữ nguyên (không lightbox)
               return (
                 <img
                   key={`${url}-${idx}`}
                   src={src}
                   alt={a?.name || "media"}
-                  className="max-w-[260px] rounded-2xl ring-1 ring-zinc-200"
+                  className={[
+                    "max-w-[260px] rounded-2xl ring-1 ring-zinc-200",
+                    mine ? "ring-white/10" : "ring-zinc-200",
+                  ].join(" ")}
                   loading="lazy"
                   onLoad={() => onMediaLoad?.()}
                   onError={() => onMediaLoad?.()}
@@ -115,6 +176,12 @@ export function MessageAttachments({
           })}
         </div>
       ) : null}
+
+      <ImageLightboxModal
+        open={!!lightboxSrc}
+        src={lightboxSrc}
+        onClose={() => setLightboxSrc(null)}
+      />
     </>
   );
 }

@@ -18,14 +18,17 @@ export function useChatHistory({
       const sender = m.sender || m.senderId || null;
       const senderId = sender?.id ? String(sender.id) : null;
       const senderName = sender?.name ?? "User";
+      const senderAvatarUrl = sender?.avatarUrl || null;
       const createdAt = m.createdAt ?? new Date().toISOString();
       const attachments = Array.isArray(m.attachments) ? m.attachments : [];
 
       return {
         id: String(m.id ?? m._id),
         from: senderId === String(meId) ? "me" : "other",
+        senderId,
         name: senderName,
-        avatar: avatarFromName(senderName),
+        avatarUrl: senderAvatarUrl,
+        avatar: senderAvatarUrl || avatarFromName(senderName),
         text: m.text ?? "",
         attachments,
         time: formatTime(createdAt),

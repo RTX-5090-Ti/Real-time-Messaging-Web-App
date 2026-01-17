@@ -110,11 +110,11 @@ export async function getMessages(req, res) {
   const docs = await Message.find(findQuery)
     .sort({ createdAt: -1 })
     .limit(pageSize + 1)
-    .populate("senderId", "_id name")
+    .populate("senderId", "_id name avatar")
     .populate({
       path: "replyTo",
       select: "_id text senderId attachments createdAt",
-      populate: { path: "senderId", select: "_id name" },
+      populate: { path: "senderId", select: "_id name avatar" },
     });
 
   const hasMore = docs.length > pageSize;
@@ -127,7 +127,13 @@ export async function getMessages(req, res) {
       id: m._id,
       text: m.text,
       attachments: (m.attachments || []).map(toClientAttachment),
-      sender: m.senderId ? { id: m.senderId._id, name: m.senderId.name } : null,
+      sender: m.senderId
+        ? {
+            id: m.senderId._id,
+            name: m.senderId.name,
+            avatarUrl: m.senderId.avatar?.url || null,
+          }
+        : null,
       createdAt: m.createdAt,
       replyTo: m.replyTo
         ? {
@@ -135,7 +141,11 @@ export async function getMessages(req, res) {
             text: m.replyTo.text,
             attachments: (m.replyTo.attachments || []).map(toClientAttachment),
             sender: m.replyTo.senderId
-              ? { id: m.replyTo.senderId._id, name: m.replyTo.senderId.name }
+              ? {
+                  id: m.replyTo.senderId._id,
+                  name: m.replyTo.senderId.name,
+                  avatarUrl: m.replyTo.senderId.avatar?.url || null,
+                }
               : null,
             createdAt: m.replyTo.createdAt,
           }
@@ -204,12 +214,12 @@ export async function sendMessage(req, res) {
     replyTo: replyTo || null,
   });
 
-  await msg.populate("senderId", "_id name");
+  await msg.populate("senderId", "_id name avatar");
   if (msg.replyTo) {
     await msg.populate({
       path: "replyTo",
       select: "_id text senderId attachments createdAt",
-      populate: { path: "senderId", select: "_id name" },
+      populate: { path: "senderId", select: "_id name avatar" },
     });
   }
 
@@ -233,9 +243,17 @@ export async function sendMessage(req, res) {
       text: msg.text,
       attachments: (msg.attachments || []).map(toClientAttachment),
       senderId: {
-        id: myId,
-        name: req.user.name,
+        id: msg.senderId?._id || myId,
+        name: msg.senderId?.name || req.user.name,
+        avatarUrl: msg.senderId?.avatar?.url || null,
       },
+      sender: msg.senderId
+        ? {
+            id: msg.senderId._id,
+            name: msg.senderId.name,
+            avatarUrl: msg.senderId.avatar?.url || null,
+          }
+        : null,
       createdAt: msg.createdAt,
       replyTo: msg.replyTo
         ? {
@@ -248,6 +266,7 @@ export async function sendMessage(req, res) {
               ? {
                   id: msg.replyTo.senderId._id,
                   name: msg.replyTo.senderId.name,
+                  avatarUrl: msg.replyTo.senderId.avatar?.url || null,
                 }
               : null,
             createdAt: msg.replyTo.createdAt,

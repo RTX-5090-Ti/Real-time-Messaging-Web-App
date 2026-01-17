@@ -32,7 +32,7 @@ export function mapConversationsToChats({
     return {
       id: String(c.id),
       name,
-      avatar: avatarFromName(name),
+      avatar: other.avatarUrl || avatarFromName(other.name),
       lastMessage: lastText || "Open to see messages",
       time: formatTimeOrDate(lastTs),
       unread: Number(c.unread ?? 0),
@@ -56,7 +56,7 @@ export function mapUsersToFriends({
     .map((u) => ({
       id: String(u.id),
       name: u.name,
-      avatar: avatarFromName(u.name),
+      avatar: u.avatarUrl || avatarFromName(u.name),
       email: u.email,
       role: u.role,
       status: onlineIdsSet.has(String(u.id)) ? "online" : "offline",

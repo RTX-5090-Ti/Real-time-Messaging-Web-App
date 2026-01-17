@@ -5,14 +5,16 @@ import { getIO } from "../sockets/io.js";
 import Notification from "../models/Notification.js";
 
 // Trả về “user sạch”: chỉ các field cần cho FE (không lộ password, vv)
-function safeUser(u) {
+const safeUser = (u) => {
+  if (!u) return null;
   return {
     id: u._id,
     name: u.name,
     email: u.email,
     role: u.role,
+    avatarUrl: u.avatar?.url || null,
   };
-}
+};
 
 // Gửi event socket tới room riêng của user: user:<id>
 function emitToUser(userId, event, payload) {
@@ -26,8 +28,8 @@ export async function listFriends(req, res) {
   const meId = req.user.id;
 
   const me = await User.findById(meId)
-    .populate("friends", "_id name email role")
-    .select("friends");
+    .populate("friends", "_id name email role avatar")
+    .select("_id friends");
 
   const friends = (me?.friends ?? []).map(safeUser);
   return res.json({ friends });
@@ -42,7 +44,7 @@ export async function listIncomingRequests(req, res) {
     toUserId: meId,
     status,
   })
-    .populate("fromUserId", "_id name email role")
+    .populate("fromUserId", "_id name email role avatar")
     .sort({ createdAt: -1 });
 
   return res.json({
@@ -70,8 +72,8 @@ export async function sendFriendRequest(req, res) {
   }
 
   const [me, toUser] = await Promise.all([
-    User.findById(meId).select("_id name email role friends"),
-    User.findById(toUserId).select("_id name email role friends"),
+    User.findById(meId).select("_id name email role friends avatar"),
+    User.findById(toUserId).select("_id name email role friends avatar"),
   ]);
 
   if (!toUser) return res.status(400).json({ message: "User không tồn tại" });
@@ -117,7 +119,12 @@ export async function sendFriendRequest(req, res) {
   emitToUser(toUserId, "notification:new", {
     type: "friend_request",
     requestId: request._id,
-    from: { id: me._id, name: me.name, email: me.email },
+    from: {
+      id: me._id,
+      name: me.name,
+      email: me.email,
+      avatarUrl: me.avatar?.url || null,
+    },
     createdAt: request.createdAt,
   });
 
@@ -165,14 +172,19 @@ export async function acceptFriendRequest(req, res) {
     });
 
     const [me, fromUser] = await Promise.all([
-      User.findById(meId).select("_id name email role"),
-      User.findById(request.fromUserId).select("_id name email role"),
+      User.findById(meId).select("_id name email role avatar"),
+      User.findById(request.fromUserId).select("_id name email role avatar"),
     ]);
 
     emitToUser(request.fromUserId, "notification:new", {
       type: "friend_request_accepted",
       requestId: request._id,
-      by: { id: me._id, name: me.name, email: me.email },
+      by: {
+        id: me._id,
+        name: me.name,
+        email: me.email,
+        avatarUrl: me.avatar?.url || null,
+      },
       createdAt: new Date().toISOString(),
     });
 
@@ -220,12 +232,17 @@ export async function rejectFriendRequest(req, res) {
   request.status = "rejected";
   await request.save();
 
-  const me = await User.findById(meId).select("_id name email");
+  const me = await User.findById(meId).select("_id name email avatar");
   //  notify người gửi (và người reject cũng nhận để UI update)
   emitToUser(request.fromUserId, "notification:new", {
     type: "friend_request_rejected",
     requestId: request._id,
-    by: { id: me._id, name: me.name, email: me.email },
+    by: {
+      id: me._id,
+      name: me.name,
+      email: me.email,
+      avatarUrl: me.avatar?.url || null,
+    },
     createdAt: new Date().toISOString(),
   });
 
