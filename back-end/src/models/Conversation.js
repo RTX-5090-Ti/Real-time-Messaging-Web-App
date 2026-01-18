@@ -8,7 +8,6 @@ const participantSchema = new mongoose.Schema(
       required: true,
     },
     lastReadAt: { type: Date, default: null },
-    //  Khi người dùng xóa/làm sạch cuộc trò chuyện, họ sẽ không thấy các tin nhắn cũ hơn thời điểm này.
     clearedAt: { type: Date, default: null },
   },
   { _id: false }
@@ -16,26 +15,41 @@ const participantSchema = new mongoose.Schema(
 
 const conversationSchema = new mongoose.Schema(
   {
-    type: { type: String, enum: ["direct"], default: "direct" },
+    // direct: 1-1 chat | group: group chat
+    type: { type: String, enum: ["direct", "group"], default: "direct" },
+
+    // ===== Group fields (only used when type === "group")
+    name: { type: String, trim: true, default: null },
+    avatar: {
+      url: { type: String, trim: true, default: null },
+      publicId: { type: String, trim: true, default: null },
+      resourceType: { type: String, trim: true, default: "image" },
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    admins: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+
     members: [
       { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     ],
     lastMessageAt: { type: Date, default: null },
-    // User nào đã 'delete chat' (ẩn hội thoại với riêng họ)
     hiddenFor: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     directKey: { type: String, default: null },
-    // Theo dõi lượt đọc từng User
     participants: { type: [participantSchema], default: [] },
   },
-
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
-// đảm bảo direct 1-1 có đúng 2 người
+
+// direct unique key
 conversationSchema.index(
   { type: 1, directKey: 1 },
   { unique: true, sparse: true }
 );
+
+// speed up query by members
+conversationSchema.index({ members: 1 });
 
 export default mongoose.model("Conversation", conversationSchema);

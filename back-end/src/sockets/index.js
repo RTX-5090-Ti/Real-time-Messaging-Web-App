@@ -28,6 +28,20 @@ function getOnlineUserIds() {
   return Array.from(onlineUsers.keys());
 }
 
+// ===== Typing TTL (anti-stuck typing) =====
+const typingTimers = new Map(); // key: `${conversationId}:${userId}` -> timeoutId
+const TYPING_TTL_MS = 4500; // test dễ thì để 4500-6000ms, prod 2500-3500ms
+
+function makeTypingKey(conversationId, userId) {
+  return `${String(conversationId)}:${String(userId)}`;
+}
+
+function clearTypingTimer(key) {
+  const t = typingTimers.get(key);
+  if (t) clearTimeout(t);
+  typingTimers.delete(key);
+}
+
 function upsertLastRead(convo, userId, at) {
   convo.participants = convo.participants || [];
   const uid = userId.toString();
@@ -138,6 +152,7 @@ export function initSocket(io) {
       const isMember = convo.members.some((m) => m.toString() === userId);
       if (!isMember) return;
 
+      // 1) Emit typing:true
       socket.to(conversationId).emit("typing:update", {
         conversationId,
         userId,
@@ -145,6 +160,29 @@ export function initSocket(io) {
         avatarUrl: socket.user.avatarUrl || null,
         typing: true,
       });
+
+      // 2) TTL auto-stop (để khỏi stuck + test nhiều người)
+      const key = makeTypingKey(conversationId, userId);
+      clearTypingTimer(key);
+
+      // lưu key vào socket để cleanup khi disconnect
+      socket._typingKeys = socket._typingKeys || new Set();
+      socket._typingKeys.add(key);
+
+      const timerId = setTimeout(() => {
+        typingTimers.delete(key);
+
+        // dùng io.to để đảm bảo stop tới room dù socket đã thay đổi state
+        io.to(conversationId).emit("typing:update", {
+          conversationId,
+          userId,
+          name: socket.user.name,
+          avatarUrl: socket.user.avatarUrl || null,
+          typing: false,
+        });
+      }, TYPING_TTL_MS);
+
+      typingTimers.set(key, timerId);
     });
 
     socket.on("typing:stop", async ({ conversationId }) => {
@@ -157,6 +195,9 @@ export function initSocket(io) {
 
       const isMember = convo.members.some((m) => m.toString() === userId);
       if (!isMember) return;
+
+      const key = makeTypingKey(conversationId, userId);
+      clearTypingTimer(key);
 
       socket.to(conversationId).emit("typing:update", {
         conversationId,
@@ -597,6 +638,23 @@ export function initSocket(io) {
     );
 
     socket.on("disconnect", () => {
+      // ✅ clear typing timers của user này
+      const keys = socket._typingKeys ? Array.from(socket._typingKeys) : [];
+      for (const key of keys) {
+        clearTypingTimer(key);
+
+        const [conversationId, uid] = String(key).split(":");
+        if (conversationId && uid) {
+          io.to(conversationId).emit("typing:update", {
+            conversationId,
+            userId: uid,
+            name: socket.user.name,
+            avatarUrl: socket.user.avatarUrl || null,
+            typing: false,
+          });
+        }
+      }
+
       const becameOffline = removeOnline(userId, socket.id);
       if (becameOffline) {
         io.emit("presence:update", { userId, online: false });

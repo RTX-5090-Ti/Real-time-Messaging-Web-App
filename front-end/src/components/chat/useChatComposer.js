@@ -29,33 +29,31 @@ export function useChatComposer({
   const typingTimerRef = useRef(null);
   const prevChatIdRef = useRef(null);
 
+  // ✅ prevent "stuck typing" when switching chats
+  useEffect(() => {
+    const nextCid = chat?.id ? String(chat.id) : null;
+    const prevCid = prevChatIdRef.current;
 
-
-// ✅ prevent "stuck typing" when switching chats
-useEffect(() => {
-  const nextCid = chat?.id ? String(chat.id) : null;
-  const prevCid = prevChatIdRef.current;
-
-  // switching from prev -> next: force stop typing for prev
-  if (prevCid && prevCid !== nextCid) {
-    if (typingTimerRef.current) {
-      clearTimeout(typingTimerRef.current);
-      typingTimerRef.current = null;
+    // switching from prev -> next: force stop typing for prev
+    if (prevCid && prevCid !== nextCid) {
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = null;
+      }
+      if (typingRef.current) typingRef.current = false;
+      onTypingStop?.(String(prevCid));
     }
-    if (typingRef.current) typingRef.current = false;
-    onTypingStop?.(String(prevCid));
-  }
 
-  prevChatIdRef.current = nextCid;
-}, [chat?.id]);
+    prevChatIdRef.current = nextCid;
+  }, [chat?.id]);
 
-// ✅ on unmount: stop typing for current chat
-useEffect(() => {
-  return () => {
-    const cur = prevChatIdRef.current;
-    if (cur) onTypingStop?.(String(cur));
-  };
-}, []);
+  // ✅ on unmount: stop typing for current chat
+  useEffect(() => {
+    return () => {
+      const cur = prevChatIdRef.current;
+      if (cur) onTypingStop?.(String(cur));
+    };
+  }, []);
   // menu states
   const [attachOpen, setAttachOpen] = useState(false);
 
@@ -102,7 +100,7 @@ useEffect(() => {
       typingRef.current = false;
       const cid = chat?.id ? String(chat.id) : null;
       if (cid) onTypingStop?.(cid);
-}
+    }
   };
 
   const startTyping = () => {
@@ -110,9 +108,9 @@ useEffect(() => {
       typingRef.current = true;
       const cid = chat?.id ? String(chat.id) : null;
       if (cid) onTypingStart?.(cid);
-}
+    }
     if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-    typingTimerRef.current = setTimeout(() => stopTyping(), 900);
+    typingTimerRef.current = setTimeout(() => stopTyping(), 900); // thòi gian typing
   };
 
   // close menus on outside click / ESC

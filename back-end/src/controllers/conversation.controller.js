@@ -2,11 +2,13 @@ import mongoose from "mongoose";
 
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
+import User from "../models/User.js";
+import { getIO } from "../sockets/io.js";
 
 function ensureParticipant(convo, userId, lastReadAt = null) {
   const uid = userId.toString();
   const exists = (convo.participants || []).some(
-    (p) => p.userId?.toString() === uid
+    (p) => p.userId?.toString() === uid,
   );
   if (!exists) {
     convo.participants = convo.participants || [];
@@ -16,7 +18,7 @@ function ensureParticipant(convo, userId, lastReadAt = null) {
 
 function getMyParticipant(convo, myId) {
   return (convo.participants || []).find(
-    (p) => p.userId?.toString() === myId.toString()
+    (p) => p.userId?.toString() === myId.toString(),
   );
 }
 
@@ -78,7 +80,7 @@ export async function createOrGetDirect(req, res) {
             ],
           },
         },
-      }
+      },
     );
   } catch (e) {}
 
@@ -89,6 +91,84 @@ export async function createOrGetDirect(req, res) {
       members: convo.members,
       lastMessageAt: convo.lastMessageAt,
       createdAt: convo.createdAt,
+    },
+  });
+}
+
+// Create a group conversation
+// body: { name, memberIds: [userId,...] }
+export async function createGroup(req, res) {
+  const myId = req.user.id;
+  const rawName = String(req.body?.name || "").trim();
+  const memberIds = Array.isArray(req.body?.memberIds)
+    ? req.body.memberIds
+    : [];
+
+  // Unique + remove myself (we will add me back)
+  const others = [...new Set(memberIds.map(String))].filter(
+    (id) => id && id !== String(myId),
+  );
+
+  // Group should have at least 3 people total (me + 2 others)
+  if (others.length < 2) {
+    return res.status(400).json({
+      message: "Group chat cần tối thiểu 3 người (bạn + 2 người khác)",
+    });
+  }
+
+  const allMemberIds = [String(myId), ...others];
+  const objectIds = allMemberIds.map((id) => new mongoose.Types.ObjectId(id));
+
+  // Optional: ensure users exist
+  const existing = await User.find({ _id: { $in: objectIds } }).select("_id");
+  if (existing.length !== objectIds.length) {
+    return res.status(400).json({ message: "Có thành viên không tồn tại" });
+  }
+
+  const now = new Date();
+
+  const convo = await Conversation.create({
+    type: "group",
+    name: rawName,
+    members: objectIds,
+    createdBy: new mongoose.Types.ObjectId(myId),
+    admins: [new mongoose.Types.ObjectId(myId)],
+    participants: objectIds.map((uid) => ({
+      userId: uid,
+      lastReadAt: now,
+      clearedAt: null,
+    })),
+  });
+
+  await convo.populate("members", "_id name email role avatar");
+
+  //  notify all members: new conversation created
+  const io = getIO();
+  if (io) {
+    for (const m of convo.members) {
+      const mid = String(m?._id || m);
+      io.to(`user:${mid}`).emit("conversation:new", {
+        conversationId: String(convo._id),
+      });
+    }
+  }
+
+  return res.status(201).json({
+    conversation: {
+      id: convo._id,
+      type: convo.type,
+      name: convo.name,
+      avatarUrl: convo.avatar?.url || null,
+      members: convo.members.map((m) => ({
+        id: m._id,
+        name: m.name,
+        email: m.email,
+        role: m.role,
+        avatarUrl: m.avatar?.url || null,
+      })),
+      createdBy: convo.createdBy ? String(convo.createdBy) : null,
+      createdAt: convo.createdAt,
+      lastMessageAt: convo.lastMessageAt,
     },
   });
 }
@@ -130,8 +210,8 @@ export async function listMyConversations(req, res) {
           ? new Date(
               Math.max(
                 new Date(lastReadAt).getTime(),
-                new Date(clearedAt).getTime()
-              )
+                new Date(clearedAt).getTime(),
+              ),
             )
           : lastReadAt || clearedAt || null;
 
@@ -139,7 +219,10 @@ export async function listMyConversations(req, res) {
         conversationId: c._id,
         senderId: { $ne: myObjectId },
       };
-      if (unreadAfter) unreadQuery.createdAt = { $gt: unreadAfter };
+      if (unreadAfter) {
+        unreadQuery.createdAt = { $gt: unreadAfter };
+        unreadQuery.kind = "user";
+      }
 
       const unread = await Message.countDocuments(unreadQuery);
 
@@ -147,6 +230,8 @@ export async function listMyConversations(req, res) {
         id: c._id,
         type: c.type,
         lastMessageAt: c.lastMessageAt,
+        name: c.name || null,
+        avatarUrl: c.avatar?.url || null,
         lastMessage: lastMsg
           ? {
               id: lastMsg._id,
@@ -171,7 +256,7 @@ export async function listMyConversations(req, res) {
         })),
         updatedAt: c.updatedAt,
       };
-    })
+    }),
   );
 
   res.json({ conversations: data });
@@ -207,7 +292,7 @@ export async function deleteConversationForMe(req, res) {
         "participants.$[p].lastReadAt": now,
       },
     },
-    { arrayFilters: [{ "p.userId": myObjectId }] }
+    { arrayFilters: [{ "p.userId": myObjectId }] },
   );
 
   // If participant entry didn't exist (edge case), create it
@@ -224,10 +309,225 @@ export async function deleteConversationForMe(req, res) {
               clearedAt: now,
             },
           },
-        }
+        },
       );
     } catch (e) {}
   }
 
   return res.json({ ok: true });
+}
+
+export async function leaveGroup(req, res) {
+  const myId = req.user.id;
+  const { id } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    return res.status(400).json({ message: "conversationId không hợp lệ" });
+  }
+
+  const convo = await Conversation.findOne({ _id: id, members: myId });
+  if (!convo) {
+    return res.status(404).json({ message: "Conversation không tồn tại" });
+  }
+
+  if (String(convo.type) !== "group") {
+    return res.status(400).json({ message: "Chỉ group chat mới leave được" });
+  }
+
+  const myObjectId = new mongoose.Types.ObjectId(myId);
+
+  // ✅ members còn lại (PHẢI lấy trước khi pull)
+  const remainMemberIds = (convo.members || []).filter(
+    (m) => String(m) !== String(myId),
+  );
+
+  // remove khỏi members + participants + admins
+  await Conversation.updateOne(
+    { _id: id },
+    {
+      $pull: {
+        members: myObjectId,
+        admins: myObjectId,
+        hiddenFor: myObjectId,
+        participants: { userId: myObjectId },
+      },
+    },
+  );
+
+  // ✅ system message "A đã rời nhóm"
+  const systemMsg = await Message.create({
+    conversationId: id,
+    kind: "system",
+    text: `${req.user.name} has left the group`,
+    system: {
+      action: "leave_group",
+      actorId: myObjectId,
+      actorName: req.user.name,
+    },
+  });
+
+  await Conversation.updateOne(
+    { _id: id },
+    { $set: { lastMessageAt: systemMsg.createdAt } },
+  );
+
+  const io = getIO();
+
+  // ✅ emit message:new cho những người còn lại
+  if (io && remainMemberIds.length) {
+    for (const mid of remainMemberIds) {
+      io.to(`user:${String(mid)}`).emit("message:new", {
+        kind: "system",
+        conversationId: String(id),
+        id: String(systemMsg._id),
+        text: systemMsg.text,
+        system: systemMsg.system,
+        attachments: [],
+        sender: null,
+        createdAt: systemMsg.createdAt,
+      });
+
+      io.to(`user:${String(mid)}`).emit("conversation:updated", {
+        conversationId: String(id),
+      });
+    }
+
+    // user vừa leave cũng reload list để biến mất convo
+    io.to(`user:${String(myId)}`).emit("conversation:updated", {
+      conversationId: String(id),
+    });
+  }
+
+  // reload convo để check admin còn không
+  const updated = await Conversation.findById(id).select("members admins");
+  if (!updated) return res.json({ ok: true });
+
+  // nếu hết admin thì chọn member đầu làm admin
+  if ((updated.admins || []).length === 0 && (updated.members || []).length) {
+    updated.admins = [updated.members[0]];
+    await updated.save();
+  }
+
+  return res.json({ ok: true });
+}
+
+export async function addGroupMember(req, res) {
+  try {
+    const myId = req.user.id;
+    const { id } = req.params;
+    const { userId } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "conversationId không hợp lệ" });
+    }
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "userId không hợp lệ" });
+    }
+
+    const convo = await Conversation.findById(id);
+    if (!convo)
+      return res.status(404).json({ message: "Conversation không tồn tại" });
+
+    if (String(convo.type) !== "group") {
+      return res
+        .status(400)
+        .json({ message: "Chỉ group chat mới add member được" });
+    }
+
+    // ✅ chỉ member mới được add người khác
+    if (!(convo.members || []).some((m) => String(m) === String(myId))) {
+      return res.status(403).json({ message: "Bạn không ở trong group này" });
+    }
+
+    // ✅ nếu đã là member rồi thì thôi
+    if ((convo.members || []).some((m) => String(m) === String(userId))) {
+      return res.json({ ok: true, already: true });
+    }
+
+    const userToAdd = await User.findById(userId).select("name");
+    if (!userToAdd)
+      return res.status(404).json({ message: "User không tồn tại" });
+
+    const userObjId = new mongoose.Types.ObjectId(userId);
+
+    // ✅ FIX CONFLICT: tách participants ra 2 update (pull trước, push sau)
+    await Conversation.updateOne(
+      { _id: id },
+      {
+        $addToSet: { members: userObjId },
+        $pull: {
+          hiddenFor: userObjId,
+          participants: { userId: userObjId },
+        },
+      },
+    );
+
+    await Conversation.updateOne(
+      { _id: id },
+      {
+        $push: {
+          participants: {
+            userId: userObjId,
+            lastReadAt: new Date(0),
+            clearedAt: null,
+          },
+        },
+      },
+    );
+
+    // ✅ system message (A thêm B / A thêm bạn)
+    const sys = {
+      type: "member_added",
+      actorId: String(myId),
+      actorName: req.user.name,
+      targetId: String(userId),
+      targetName: userToAdd.name,
+    };
+
+    const systemMsg = await Message.create({
+      conversationId: id,
+      kind: "system",
+      senderId: null,
+      system: sys,
+      text: `${req.user.name} added ${userToAdd.name} to the group.`,
+    });
+
+    await Conversation.updateOne(
+      { _id: id },
+      { $set: { lastMessageAt: systemMsg.createdAt } },
+    );
+
+    const updated = await Conversation.findById(id).select("members");
+    const memberIds = (updated?.members || []).map((x) => String(x));
+
+    const io = getIO();
+    if (io) {
+      for (const mid of memberIds) {
+        io.to(`user:${mid}`).emit("message:new", {
+          kind: "system",
+          conversationId: String(id),
+          id: String(systemMsg._id),
+          text: systemMsg.text,
+          system: systemMsg.system, // ✅ IMPORTANT để UI hiện “thêm bạn”
+          attachments: [],
+          sender: null,
+          createdAt: systemMsg.createdAt,
+        });
+
+        io.to(`user:${mid}`).emit("conversation:updated", {
+          conversationId: String(id),
+        });
+      }
+
+      // ✅ thằng mới vào group chắc chắn thấy group xuất hiện ngay
+      io.to(`user:${String(userId)}`).emit("conversation:new", {
+        conversationId: String(id),
+      });
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.log("addGroupMember error:", err);
+    return res.status(500).json({ message: err.message || "Server error" });
+  }
 }

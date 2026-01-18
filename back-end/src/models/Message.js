@@ -46,10 +46,32 @@ const messageSchema = new mongoose.Schema(
       ref: "Conversation",
       required: true,
     },
+
+    kind: { type: String, enum: ["user", "system"], default: "user" },
+
     senderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      default: null,
+      required: function () {
+        return this.kind !== "system";
+      },
+    },
+
+    system: {
+      type: { type: String, default: "" }, // member_added | member_left | ...
+      actorId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+      actorName: { type: String, default: "" },
+      targetId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+      targetName: { type: String, default: "" },
     },
 
     text: { type: String, trim: true, default: "" },

@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import ImageLightboxModal from "./ImageLightboxModal.jsx";
+import ConfirmModal from "./ConfirmModal.jsx";
 
 const isGifUrl = (url) => /\.(gif)(\?|$)/i.test(String(url || ""));
 
@@ -134,10 +135,13 @@ export default function GroupInfo({
   open,
   onClose,
   onOpenProfile,
+  onLeaveGroup,
+  onAddMember,
 }) {
   const [mediaOpen, setMediaOpen] = useState(true);
   const [fileOpen, setFileOpen] = useState(true);
   const [showAllMedia, setShowAllMedia] = useState(false);
+  const [memberOpen, setMemberOpen] = useState(true);
 
   const name = chat?.name || "Conversation";
   const avatar = chat?.avatar;
@@ -147,7 +151,14 @@ export default function GroupInfo({
   const mediaAll = groupInfo?.mediaAll || mediaItems;
   const fileItems = groupInfo?.fileItems || [];
 
+  const members = groupInfo?.members || [];
+  const adminIds = groupInfo?.adminIds || []; // (step 3.3 tao sẽ add backend)
+
   const [lightboxSrc, setLightboxSrc] = useState(null);
+
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [leaveLoading, setLeaveLoading] = useState(false);
+  const isGroup = String(chat?.type || "") === "group";
 
   const mediaRight = useMemo(() => {
     const total = Number(counts.mediaTotal ?? mediaItems.length) || 0;
@@ -158,6 +169,11 @@ export default function GroupInfo({
     const total = Number(counts.docs ?? fileItems.length) || 0;
     return total ? `(${total})` : "(0)";
   }, [counts.docs, fileItems.length]);
+
+  const memberRight = useMemo(() => {
+    const total = Number(members.length) || 0;
+    return total ? `(${total})` : "(0)";
+  }, [members.length]);
 
   return (
     <>
@@ -218,8 +234,33 @@ export default function GroupInfo({
             </div>
 
             {/* Sections */}
+
             <Section
-              title="Ảnh / Video"
+              title="Members"
+              right={memberRight}
+              open={memberOpen}
+              onToggle={() => setMemberOpen((v) => !v)}
+            >
+              <MemberList
+                items={members}
+                adminIds={adminIds}
+                onOpenProfile={onOpenProfile}
+              />
+
+              {String(chat?.type) === "group" &&
+              typeof onAddMember === "function" ? (
+                <button
+                  type="button"
+                  onClick={onAddMember}
+                  className="w-full h-10 mt-3 text-sm font-semibold border cursor-pointer rounded-xl border-violet-200 hover:bg-violet-50 text-violet-700"
+                >
+                  + Add member
+                </button>
+              ) : null}
+            </Section>
+
+            <Section
+              title="Pictures / Video"
               right={mediaRight}
               open={mediaOpen}
               onToggle={() => setMediaOpen((v) => !v)}
@@ -253,6 +294,16 @@ export default function GroupInfo({
             >
               <FileList items={fileItems} />
             </Section>
+
+            {isGroup ? (
+              <button
+                type="button"
+                onClick={() => setLeaveOpen(true)}
+                className="w-full h-10 text-sm font-semibold text-red-600 border border-red-200 cursor-pointer rounded-xl hover:bg-red-50"
+              >
+                Leave group
+              </button>
+            ) : null}
           </div>
         </aside>
       </div>
@@ -315,6 +366,30 @@ export default function GroupInfo({
             </div>
 
             <Section
+              title="Members"
+              right={memberRight}
+              open={memberOpen}
+              onToggle={() => setMemberOpen((v) => !v)}
+            >
+              <MemberList
+                items={members}
+                adminIds={adminIds}
+                onOpenProfile={onOpenProfile}
+              />
+
+              {String(chat?.type) === "group" &&
+              typeof onAddMember === "function" ? (
+                <button
+                  type="button"
+                  onClick={onAddMember}
+                  className="w-full h-10 mt-3 text-sm font-semibold border cursor-pointer rounded-xl border-violet-200 hover:bg-violet-50 text-violet-700"
+                >
+                  + Add member
+                </button>
+              ) : null}
+            </Section>
+
+            <Section
               title="Pictures / Video"
               right={mediaRight}
               open={mediaOpen}
@@ -349,6 +424,24 @@ export default function GroupInfo({
             >
               <FileList items={fileItems} />
             </Section>
+
+            {/* <button
+              type="button"
+              onClick={onLeaveGroup}
+              className="w-full h-10 text-sm font-semibold text-red-600 border border-red-200 cursor-pointer rounded-xl hover:bg-red-50"
+            >
+              Leave group
+            </button> */}
+
+            {isGroup ? (
+              <button
+                type="button"
+                onClick={() => setLeaveOpen(true)}
+                className="w-full h-10 text-sm font-semibold text-red-600 border border-red-200 cursor-pointer rounded-xl hover:bg-red-50"
+              >
+                Leave group
+              </button>
+            ) : null}
           </div>
         </div>
       </aside>
@@ -358,6 +451,80 @@ export default function GroupInfo({
         src={lightboxSrc}
         onClose={() => setLightboxSrc(null)}
       />
+
+      <ConfirmModal
+        open={leaveOpen}
+        title="Leave group?"
+        description="Are you sure you want to leave this group?"
+        cancelText="Cancel"
+        confirmText="Confirm"
+        loading={leaveLoading}
+        onCancel={() => {
+          if (!leaveLoading) setLeaveOpen(false);
+        }}
+        onConfirm={async () => {
+          try {
+            setLeaveLoading(true);
+            await onLeaveGroup?.();
+            setLeaveOpen(false);
+          } finally {
+            setLeaveLoading(false);
+          }
+        }}
+      />
     </>
+  );
+}
+
+function MemberList({ items, adminIds = [], onOpenProfile }) {
+  if (!items?.length) {
+    return (
+      <div className="px-3 py-3 text-sm border rounded-2xl border-zinc-200 bg-zinc-50 text-zinc-500">
+        No members.
+      </div>
+    );
+  }
+
+  const adminSet = new Set((adminIds || []).map(String));
+
+  return (
+    <div className="pt-3 space-y-2">
+      {items.map((m) => {
+        const isAdmin = adminSet.has(String(m.id));
+
+        return (
+          <button
+            key={String(m.id)}
+            type="button"
+            className="flex items-center w-full gap-3 p-3 text-left border cursor-pointer rounded-2xl border-zinc-200 hover:bg-zinc-50"
+            onClick={() => onOpenProfile?.(String(m.id), m)}
+            title="Open profile"
+          >
+            <img
+              src={m.avatar}
+              alt={m.name}
+              className="object-cover w-10 h-10 rounded-full shrink-0"
+            />
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="font-semibold truncate text-zinc-900">{m.name}</p>
+                {isAdmin ? (
+                  <span className="px-2 py-0.5 text-[11px] rounded-full bg-violet-100 text-violet-700 shrink-0">
+                    Admin
+                  </span>
+                ) : null}
+              </div>
+
+              <p className="text-xs truncate text-zinc-500">
+                {m.email || m.role || "Member"}
+              </p>
+            </div>
+
+            <span className="text-xs text-zinc-500">›</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }

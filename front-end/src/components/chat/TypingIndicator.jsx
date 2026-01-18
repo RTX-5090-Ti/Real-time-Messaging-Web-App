@@ -17,7 +17,7 @@ export const typingIndicatorCss = `
 .typing-dot:nth-child(3) { animation-delay: .3s; }
 `;
 
-export default function TypingIndicator({ avatar, name, show }) {
+export default function TypingIndicator({ avatar, name, show, text }) {
   return (
     <>
       <style>{typingIndicatorCss}</style>
@@ -39,6 +39,10 @@ export default function TypingIndicator({ avatar, name, show }) {
           title={name}
         />
         <div className="px-4 py-3 bg-white border shadow-sm rounded-2xl border-zinc-200">
+          {text ? (
+            <div className="mb-1 text-xs font-medium text-zinc-600">{text}</div>
+          ) : null}
+
           <div className="flex items-center gap-1">
             <span className="typing-dot" />
             <span className="typing-dot" />

@@ -9,6 +9,7 @@ import { MessageReactionsLine } from "./MessageReactionsLine";
 
 export function MessageBubble({
   msg,
+  showSenderName = false,
   onMediaLoad,
   onRetry,
   highlightQuery = "",
@@ -74,6 +75,17 @@ export function MessageBubble({
 
   const replyId = msg?.replyTo?.id || msg?.replyTo?._id;
 
+  const isSystem = msg?.kind === "system" || msg?.from === "system";
+  if (isSystem) {
+    return (
+      <div className="flex justify-center w-full py-2">
+        <div className="px-3 py-1 text-xs rounded-full bg-zinc-100 text-zinc-500">
+          {msg.text}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex w-full">
       {!mine ? (
@@ -113,6 +125,12 @@ export function MessageBubble({
             ) : null}
 
             <div className={bubbleWrapClass}>
+              {/* Group chat: show sender name (only for other people) */}
+              {!mine && showSenderName && msg?.name ? (
+                <div className="pl-1 mb-1 text-xs font-semibold select-none text-zinc-500">
+                  {msg.name}
+                </div>
+              ) : null}
               <div className={bubbleClass}>
                 {msg?.pinned ? (
                   <div

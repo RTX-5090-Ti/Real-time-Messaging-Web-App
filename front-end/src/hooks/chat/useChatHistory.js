@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { ChatAPI } from "../../api/chat.api.js";
 import { avatarFromName, formatTime } from "../../utils/chatUi.js";
+import { formatSystemText } from "../../utils/systemText.js";
 
 export function useChatHistory({
   meId,
@@ -21,6 +22,21 @@ export function useChatHistory({
       const senderAvatarUrl = sender?.avatarUrl || null;
       const createdAt = m.createdAt ?? new Date().toISOString();
       const attachments = Array.isArray(m.attachments) ? m.attachments : [];
+
+      const kind = m.kind || "user";
+
+      if (kind === "system") {
+        const createdAt = m.createdAt ?? new Date().toISOString();
+        return {
+          id: String(m.id ?? m._id),
+          kind: "system",
+          from: "system",
+          system: m.system || null,
+          text: formatSystemText(m.system, m.text ?? "", meId),
+          createdAt,
+          time: formatTime(createdAt),
+        };
+      }
 
       return {
         id: String(m.id ?? m._id),

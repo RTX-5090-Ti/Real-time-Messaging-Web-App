@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { socket } from "../../socket/socket.js";
 import { bumpChat } from "../../utils/chat/chatPageHelpers.js";
 import { avatarFromName, formatTime } from "../../utils/chatUi.js";
+import { formatSystemText } from "../../utils/systemText.js";
 
 export function useChatSocket({
   meId,
@@ -52,6 +53,42 @@ export function useChatSocket({
 
     const onNewMessage = async (payload) => {
       const { conversationId } = payload || {};
+
+      const kind = payload?.kind || "user";
+      if (kind === "system") {
+        if (!conversationId) return;
+
+        const createdAt = payload.createdAt ?? new Date().toISOString();
+        const cid = String(conversationId);
+        const sys = payload.system || null;
+
+        const uiSys = {
+          id: String(payload.id ?? payload._id),
+          kind: "system",
+          from: "system",
+          system: sys,
+          text: formatSystemText(sys, payload.text ?? "", meId),
+          createdAt,
+          time: formatTime(createdAt),
+        };
+
+        setMessagesByChatId((prev) => {
+          const list = prev[cid] ?? [];
+          if (list.some((m) => m.id === uiSys.id)) return prev;
+          return { ...prev, [cid]: [...list, uiSys] };
+        });
+
+        setChats((prev) =>
+          bumpChat(prev, cid, (c) => ({
+            ...c,
+            lastMessage: uiSys.text || "Message",
+            time: uiSys.time,
+          }))
+        );
+
+        return; // ✅ system xong là dừng
+      }
+
       if (!conversationId) return;
 
       const serverMsgId = payload?.id ?? payload?._id;
@@ -131,7 +168,7 @@ export function useChatSocket({
         return { ...prev, [cid]: [...list, { ...uiMsg, pending: false }] };
       });
 
-      const lastPreview = uiMsg.text?.trim()
+      const basePreview = uiMsg.text?.trim()
         ? uiMsg.text
         : previewTextFromAttachments(attachments);
 
@@ -149,14 +186,22 @@ export function useChatSocket({
         const isFromMe = senderId === String(meId);
         const shouldIncUnread = !isActive && !isFromMe;
 
-        return bumpChat(prev, cid, (c) => ({
-          ...c,
-          lastMessage: lastPreview,
-          time: uiMsg.time,
-          unread: shouldIncUnread
-            ? Number(c.unread || 0) + 1
-            : Number(c.unread || 0),
-        }));
+        return bumpChat(prev, cid, (c) => {
+          const isGroup = String(c.type || "direct") === "group";
+          const showPreview =
+            isGroup && senderName
+              ? `${senderName}: ${basePreview || "Message"}`
+              : basePreview || "Message";
+
+          return {
+            ...c,
+            lastMessage: showPreview,
+            time: uiMsg.time,
+            unread: shouldIncUnread
+              ? Number(c.unread || 0) + 1
+              : Number(c.unread || 0),
+          };
+        });
       });
     };
 
@@ -408,6 +453,17 @@ export function useChatSocket({
       if (typeof fn === "function") fn(payload);
     };
 
+    const onConversationNew = () => {
+      // chỉ cần reload list conversations thôi
+      const fn = reloadConversationsRef.current;
+      if (typeof fn === "function") fn(String(meId)).catch(() => {});
+    };
+
+    const onConversationUpdated = () => {
+      const fn = reloadConversationsRef.current;
+      if (typeof fn === "function") fn(String(meId)).catch(() => {});
+    };
+
     socket.on("connect", onConnect);
     socket.on("message:new", onNewMessage);
     socket.on("presence:state", onPresenceState);
@@ -424,6 +480,9 @@ export function useChatSocket({
     socket.on("message:pinned", onMessagePinned);
 
     socket.on("user:avatar", onUserAvatar);
+    socket.on("conversation:new", onConversationNew);
+
+    socket.on("conversation:updated", onConversationUpdated);
 
     if (socket.connected) {
       onConnect(); // vì connect event sẽ không bắn lại trong case StrictMode
@@ -446,6 +505,9 @@ export function useChatSocket({
       socket.off("message:pinned", onMessagePinned);
 
       socket.off("user:avatar", onUserAvatar);
+      socket.off("conversation:new", onConversationNew);
+
+      socket.off("conversation:updated", onConversationUpdated);
 
       didSyncPresenceRef.current = false;
     };

@@ -38,6 +38,20 @@ export default function ChatWindow({
 
   const subtitle = useMemo(() => {
     if (!chat) return null;
+
+    const isGroup = String(chat?.type || "").toLowerCase() === "group";
+
+    // ✅ Group chat: show member count
+    if (isGroup) {
+      const rawMembers = Array.isArray(chat?._raw?.members)
+        ? chat._raw.members
+        : null;
+      const count = rawMembers ? rawMembers.length : Number(chat?.members || 0);
+
+      return count > 0 ? `${count} members` : "Group chat";
+    }
+
+    // ✅ Direct chat: keep Online/Offline
     return otherOnline ? "Online" : "Offline";
   }, [chat, otherOnline]);
 
@@ -278,6 +292,7 @@ export default function ChatWindow({
         seenBy={seenBy}
         seenKey={seenKey}
         showTypingBubble={showTypingBubble}
+        typingText={typingText}
         onRetryMessage={onRetryMessage}
         onReplySelect={onReplySelect}
         onReactMessage={onReactMessage}

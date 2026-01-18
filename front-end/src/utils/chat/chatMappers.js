@@ -1,3 +1,4 @@
+// ✅ Map conversation list (direct + group) -> Sidebar UI
 export function mapConversationsToChats({
   convos,
   meId,
@@ -20,31 +21,61 @@ export function mapConversationsToChats({
   });
 
   return list.map((c) => {
-    const other =
-      c.members?.find((m) => String(m.id) !== String(meId)) ??
-      c.members?.[0] ??
-      null;
+    const members = Array.isArray(c?.members) ? c.members : [];
 
-    const name = other?.name ?? "Conversation";
-    const lastText = c.lastMessage?.text ?? "";
-    const lastTs = c.lastMessage?.createdAt ?? c.lastMessageAt ?? c.createdAt;
+    // ✅ detect group
+    const isGroup =
+      String(c?.type || "").toLowerCase() === "group" ||
+      c?.isGroup === true ||
+      members.length > 2;
+
+    const other =
+      members.find((m) => String(m.id) !== String(meId)) ?? members[0] ?? null;
+
+    // ✅ group name
+    const groupName =
+      c?.name ||
+      c?.title ||
+      members
+        .filter((m) => String(m.id) !== String(meId))
+        .map((m) => m?.name)
+        .filter(Boolean)
+        .slice(0, 3)
+        .join(", ") ||
+      "Group chat";
+
+    const name = isGroup ? groupName : other?.name ?? "Conversation";
+
+    const avatar = isGroup
+      ? c?.avatarUrl || avatarFromName(name)
+      : other?.avatarUrl || avatarFromName(other?.name || name);
+
+    const otherUserId = !isGroup && other?.id ? String(other.id) : null;
+
+    const online = otherUserId ? (onlineIdsSet.has(otherUserId) ? 2 : 1) : 0;
+
+    const lastText = c?.lastMessage?.text ?? "";
+    const lastTs =
+      c?.lastMessage?.createdAt ?? c?.lastMessageAt ?? c?.createdAt;
 
     return {
       id: String(c.id),
+      type: isGroup ? "group" : "direct", // ✅ quan trọng nhất
       name,
-      avatar: other.avatarUrl || avatarFromName(other.name),
+      avatar,
       lastMessage: lastText || "Open to see messages",
       time: formatTimeOrDate(lastTs),
       unread: Number(c.unread ?? 0),
       pinned: false,
-      members: c.members?.length ?? 2,
-      online: other?.id ? (onlineIdsSet.has(String(other.id)) ? 2 : 1) : 0,
-      otherUserId: other?.id ? String(other.id) : null,
+      members: members.length || 2,
+      online,
+      otherUserId,
       _raw: c,
     };
   });
 }
 
+// ✅ Map friend list (users) -> Friend UI
 export function mapUsersToFriends({
   users,
   meId,

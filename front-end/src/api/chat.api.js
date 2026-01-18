@@ -57,4 +57,14 @@ export const ChatAPI = {
   editMessage: (messageId, body) => api.patch(`/messages/${messageId}`, body),
   recallMessage: (messageId) => api.post(`/messages/${messageId}/recall`),
   togglePinMessage: (messageId) => api.post(`/messages/${messageId}/pin`),
+
+  // function crateGroup
+  createGroup: ({ name, memberIds }) =>
+    api.post("/conversations/group", { name, memberIds }),
+
+  leaveGroup: (conversationId) =>
+    api.post(`/conversations/${conversationId}/leave`),
+
+  addGroupMember: (conversationId, userId) =>
+    api.post(`/conversations/${conversationId}/members`, { userId }),
 };

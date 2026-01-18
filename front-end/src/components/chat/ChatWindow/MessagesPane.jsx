@@ -19,6 +19,7 @@ export default function MessagesPane({
   seenBy,
   seenKey,
   showTypingBubble,
+  typingText,
 
   onRetryMessage,
   onReplySelect,
@@ -53,6 +54,21 @@ export default function MessagesPane({
       {chat ? (
         <>
           {messages.map((m, idx) => {
+            const isGroup = String(chat?.type || "direct") === "group";
+            const prev = messages[idx - 1];
+            const prevSenderId = prev?.senderId ? String(prev.senderId) : null;
+            const curSenderId = m?.senderId ? String(m.senderId) : null;
+
+            // ✅ Group: show sender name only when sender changes (and not my own messages)
+            const isRealOther = m?.from === "other";
+
+            const showSenderName =
+              isGroup &&
+              isRealOther &&
+              (curSenderId
+                ? curSenderId !== prevSenderId
+                : String(m?.name || "") !== String(prev?.name || ""));
+
             const q = (searchQuery || "").toLowerCase();
             const isMatch =
               !!q &&
@@ -68,6 +84,7 @@ export default function MessagesPane({
               <div key={m.id} data-msg-id={m.id} className="space-y-1">
                 <MessageBubble
                   msg={m}
+                  showSenderName={showSenderName}
                   onMediaLoad={handleMediaLoad}
                   onRetry={onRetryMessage}
                   highlightQuery={searchQuery}
@@ -92,6 +109,7 @@ export default function MessagesPane({
             show={showTypingBubble}
             avatar={chat.avatar}
             name={chat.name}
+            text={typingText}
           />
         </>
       ) : (

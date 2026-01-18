@@ -6,7 +6,7 @@ import Conversation from "../models/Conversation.js";
 function upsertLastRead(convo, userId, at) {
   convo.participants = convo.participants || [];
   const idx = convo.participants.findIndex(
-    (p) => p.userId?.toString() === userId.toString()
+    (p) => p.userId?.toString() === userId.toString(),
   );
   if (idx === -1) {
     convo.participants.push({ userId, lastReadAt: at, clearedAt: null });
@@ -84,7 +84,7 @@ export async function getMessages(req, res) {
 
   // Messenger-style "delete/clear chat": hide messages older than clearedAt for this user
   const myP = (convo.participants || []).find(
-    (p) => p.userId?.toString() === myId.toString()
+    (p) => p.userId?.toString() === myId.toString(),
   );
   const clearedAt = myP?.clearedAt ? new Date(myP.clearedAt) : null;
 
@@ -124,8 +124,10 @@ export async function getMessages(req, res) {
 
   return res.json({
     messages: page.map((m) => ({
+      kind: m.kind || "user",
       id: m._id,
       text: m.text,
+      system: m.system || null,
       attachments: (m.attachments || []).map(toClientAttachment),
       sender: m.senderId
         ? {
@@ -233,7 +235,7 @@ export async function sendMessage(req, res) {
   try {
     await Conversation.updateOne(
       { _id: conversationId },
-      { $pull: { hiddenFor: { $in: convo.members } } }
+      { $pull: { hiddenFor: { $in: convo.members } } },
     );
   } catch (e) {}
 
@@ -260,7 +262,7 @@ export async function sendMessage(req, res) {
             id: msg.replyTo._id,
             text: msg.replyTo.text,
             attachments: (msg.replyTo.attachments || []).map(
-              toClientAttachment
+              toClientAttachment,
             ),
             sender: msg.replyTo.senderId
               ? {

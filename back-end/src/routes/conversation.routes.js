@@ -1,11 +1,17 @@
 import { Router } from "express";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import { validate } from "../middlewares/validate.js";
-import { createDirectRules } from "../validations/conversation.validation.js";
+import {
+  createDirectRules,
+  createGroupRules,
+} from "../validations/conversation.validation.js";
 import {
   createOrGetDirect,
+  createGroup,
   listMyConversations,
   deleteConversationForMe,
+  leaveGroup,
+  addGroupMember,
 } from "../controllers/conversation.controller.js";
 
 const router = Router();
@@ -20,5 +26,11 @@ router.post(
   validate,
   createOrGetDirect
 );
+
+router.post("/group", requireAuth, createGroupRules, validate, createGroup);
+
+router.post("/:id/leave", requireAuth, leaveGroup);
+
+router.post("/:id/members", requireAuth, addGroupMember);
 
 export default router;

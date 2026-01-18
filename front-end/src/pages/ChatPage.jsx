@@ -18,9 +18,12 @@ import { useChatHistory } from "../hooks/chat/useChatHistory.js";
 import { useChatSocket } from "../hooks/chat/useChatSocket.js";
 import { useNotifications } from "../hooks/chat/useNotifications.js";
 import { useOpenChatWithFriend } from "../hooks/chat/useOpenChatWithFriend.js";
+import AddMemberModal from "../components/chat/AddMemberModal";
 
 import ProfileModal from "../components/chat/ProfileModal.jsx";
 import UserProfileModal from "../components/chat/UserProfileModal.jsx";
+
+import CreateGroupModal from "../components/chat/CreateGroupModal.jsx";
 
 export default function ChatPage() {
   const navigate = useNavigate();
@@ -31,6 +34,7 @@ export default function ChatPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [replyDraft, setReplyDraft] = useState(null);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
 
   const [deleteModal, setDeleteModal] = useState({
     open: false,
@@ -62,6 +66,22 @@ export default function ChatPage() {
     seedUser: null,
   });
 
+  const [addOpen, setAddOpen] = useState(false);
+
+  const onAddMember = () => setAddOpen(true);
+
+  const onPickAddMember = async (u) => {
+    if (!activeChatId) return;
+
+    try {
+      await ChatAPI.addGroupMember(String(activeChatId), String(u.id));
+      setAddOpen(false);
+    } catch (err) {
+      console.log("Add member failed:", err);
+      alert(err?.response?.data?.message || "Add member failed");
+    }
+  };
+
   const openOtherProfile = (userId, seedUser = null) => {
     const id = String(userId || "");
     if (!id) return;
@@ -74,7 +94,7 @@ export default function ChatPage() {
 
   const closeRecallModal = () => {
     setRecallModal((s) =>
-      s.busy ? s : { open: false, cid: null, mid: null, busy: false }
+      s.busy ? s : { open: false, cid: null, mid: null, busy: false },
     );
   };
 
@@ -82,7 +102,7 @@ export default function ChatPage() {
     setEditModal((s) =>
       s.busy
         ? s
-        : { open: false, cid: null, msg: null, text: "", err: "", busy: false }
+        : { open: false, cid: null, msg: null, text: "", err: "", busy: false },
     );
   };
 
@@ -264,12 +284,12 @@ export default function ChatPage() {
   }, []);
   const activeChat = useMemo(
     () => chats.find((c) => c.id === activeChatId) || null,
-    [chats, activeChatId]
+    [chats, activeChatId],
   );
 
   const messages = useMemo(
     () => messagesByChatId[activeChatId] ?? [],
-    [messagesByChatId, activeChatId]
+    [messagesByChatId, activeChatId],
   );
 
   const groupInfo = useMemo(() => {
@@ -401,7 +421,7 @@ export default function ChatPage() {
         (err, res) => {
           // không cần làm gì thêm: server sẽ bắn "message:reaction" về và useChatSocket sẽ patch lại
           if (err || !res?.ok) console.warn("react failed:", err || res);
-        }
+        },
       );
   };
 
@@ -433,7 +453,7 @@ export default function ChatPage() {
                 if (!res?.ok)
                   return reject(new Error(res?.error || "PIN_FAILED"));
                 resolve(res);
-              }
+              },
             );
         });
         return;
@@ -504,7 +524,7 @@ export default function ChatPage() {
                 if (!res?.ok)
                   return reject(new Error(res?.error || "EDIT_FAILED"));
                 resolve(res);
-              }
+              },
             );
         });
       } else {
@@ -545,7 +565,7 @@ export default function ChatPage() {
 
     // backup để revert nếu fail
     const backup = (messagesByChatId[cid] ?? []).find(
-      (m) => String(m.id) === mid
+      (m) => String(m.id) === mid,
     );
 
     // optimistic
@@ -570,7 +590,7 @@ export default function ChatPage() {
                 if (!res?.ok)
                   return reject(new Error(res?.error || "RECALL_FAILED"));
                 resolve(res);
-              }
+              },
             );
         });
       } else {
@@ -728,12 +748,26 @@ export default function ChatPage() {
 
   const typingText = useMemo(() => {
     if (!activeChatId) return null;
+
     const byUser = typingByConvo[activeChatId];
     if (!byUser) return null;
+
     const names = Object.values(byUser).filter(Boolean);
-    if (!names.length) return null;
-    return `${names[0]} is typing…`;
-  }, [typingByConvo, activeChatId]);
+    const uniq = Array.from(new Set(names));
+    if (!uniq.length) return null;
+
+    const isGroup = activeChat?.type === "group";
+
+    // 1-1: giữ kiểu cũ
+    if (!isGroup) return `${uniq[0]} is typing…`;
+
+    // Group: show nhiều người
+    if (uniq.length === 1) return `${uniq[0]} is typing…`;
+    if (uniq.length === 2) return `${uniq[0]} and ${uniq[1]} are typing…`;
+
+    const rest = uniq.length - 2;
+    return `${uniq[0]}, ${uniq[1]} and ${rest} others are typing…`;
+  }, [typingByConvo, activeChatId, activeChat?.type]);
 
   // seen-by avatars
   const seenBy = useMemo(() => {
@@ -820,7 +854,7 @@ export default function ChatPage() {
         lastMessage: text,
         time: formatTime(now),
         unread: 0,
-      }))
+      })),
     );
 
     sendWithRetry({
@@ -885,7 +919,7 @@ export default function ChatPage() {
         lastMessage,
         time: formatTime(now),
         unread: 0,
-      }))
+      })),
     );
 
     sendWithRetry({
@@ -923,7 +957,21 @@ export default function ChatPage() {
   };
 
   const onProfile = () => setProfileOpen(true);
-  const onCreateGroup = () => alert("Group chat: not implemented yet.");
+  const onCreateGroup = () => setCreateGroupOpen(true);
+
+  const onSubmitCreateGroup = async ({ name, memberIds }) => {
+    const res = await ChatAPI.createGroup({ name, memberIds });
+
+    const newId = res.data?.conversation?.id;
+    // reload list để mapper chạy đúng
+    const meId = String(me?.id || "");
+    await reloadConversations?.(meId);
+
+    if (newId) {
+      setActiveChatId(String(newId));
+      setTab("chats");
+    }
+  };
 
   if (!me) {
     // ✅ Delete chat (hide conversation for me)
@@ -936,6 +984,14 @@ export default function ChatPage() {
       </div>
     );
   }
+
+  const onLeaveGroup = async () => {
+    if (!activeChatId || !me?.id) return;
+
+    await ChatAPI.leaveGroup(String(activeChatId));
+    setInfoOpen(false);
+    setActiveChatId(null);
+  };
 
   return (
     <div className="w-full h-screen p-4 bg-gradient-to-r from-[#b06ab3] to-[#4568dc]">
@@ -950,7 +1006,7 @@ export default function ChatPage() {
             setTab("chats");
             // mở chat => unread = 0
             setChats((prev) =>
-              prev.map((c) => (c.id === String(id) ? { ...c, unread: 0 } : c))
+              prev.map((c) => (c.id === String(id) ? { ...c, unread: 0 } : c)),
             );
           }}
           tab={tab}
@@ -982,11 +1038,11 @@ export default function ChatPage() {
             const otherId =
               chat?.otherUserId ||
               chat?._raw?.members?.find?.(
-                (m) => String(m.id) !== String(me?.id)
+                (m) => String(m.id) !== String(me?.id),
               )?.id;
 
             const seed = chat?._raw?.members?.find?.(
-              (m) => String(m.id) === String(otherId)
+              (m) => String(m.id) === String(otherId),
             );
 
             openOtherProfile(otherId, seed);
@@ -1007,8 +1063,8 @@ export default function ChatPage() {
             const cid = conversationId
               ? String(conversationId)
               : activeChatId
-              ? String(activeChatId)
-              : null;
+                ? String(activeChatId)
+                : null;
             if (!cid || !socket.connected) return;
             socket.emit("typing:start", {
               conversationId: cid,
@@ -1020,8 +1076,8 @@ export default function ChatPage() {
             const cid = conversationId
               ? String(conversationId)
               : activeChatId
-              ? String(activeChatId)
-              : null;
+                ? String(activeChatId)
+                : null;
             if (!cid || !socket.connected) return;
             socket.emit("typing:stop", {
               conversationId: cid,
@@ -1061,23 +1117,44 @@ export default function ChatPage() {
           groupInfo={groupInfo}
           open={infoOpen}
           onClose={() => setInfoOpen(false)}
-          onProfile={onProfile}
-          onOpenProfile={() => {
+          onOpenProfile={(userId, seed) => {
+            // ✅ nếu click vào member trong group -> sẽ có userId truyền xuống
+            if (userId) return openOtherProfile(String(userId), seed);
+
+            // ✅ fallback: direct chat (click avatar trên top)
             const otherId = activeChat?.otherUserId;
-            const seed = activeChat?._raw?.members?.find?.(
-              (m) => String(m.id) === String(otherId)
+            const seed2 = activeChat?._raw?.members?.find?.(
+              (m) => String(m.id) === String(otherId),
             );
-            openOtherProfile(otherId, seed);
+            openOtherProfile(otherId, seed2);
           }}
+          onLeaveGroup={onLeaveGroup}
+          onAddMember={onAddMember}
         />
 
         <SearchFriendModal
           open={searchOpen}
           onClose={() => setSearchOpen(false)}
+          onPick={onPickAddMember}
           onSearchEmail={noti.searchUserByEmail}
           onSendRequest={noti.sendFriendRequest}
           onAccept={noti.acceptRequest}
           onReject={noti.rejectRequest}
+        />
+
+        <AddMemberModal
+          open={addOpen}
+          onClose={() => setAddOpen(false)}
+          friends={friends} // ✅ list bạn bè của mày
+          existingMemberIds={activeChat?._raw?.members?.map((m) => m.id) || []}
+          onPick={onPickAddMember}
+        />
+
+        <CreateGroupModal
+          open={createGroupOpen}
+          onClose={() => setCreateGroupOpen(false)}
+          friends={sortedFriends}
+          onCreate={onSubmitCreateGroup}
         />
 
         {recallModal.open && (
