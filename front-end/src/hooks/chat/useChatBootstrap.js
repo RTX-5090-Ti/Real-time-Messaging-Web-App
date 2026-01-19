@@ -55,13 +55,16 @@ export function useChatBootstrap({ navigate }) {
   const joinedConvosRef = useRef(new Set());
 
   const reloadConversations = async (meId) => {
+    const effectiveMeId = meId ? String(meId) : String(me?.id || "");
+    if (!effectiveMeId) return { mapped: [], convos: [] };
+
     const convosRes = await ChatAPI.listConversations();
     const convos = convosRes.data?.conversations ?? [];
     const onlineNow = new Set((onlineIdsRef.current || []).map(String));
 
     const mapped = mapConversationsToChats({
       convos,
-      meId,
+      meId: effectiveMeId,
       onlineIdsSet: onlineNow,
       avatarFromName,
       formatTimeOrDate,

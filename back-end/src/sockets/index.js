@@ -76,9 +76,8 @@ export function initSocket(io) {
     socket.on("conversation:join", async (conversationId) => {
       if (!mongoose.Types.ObjectId.isValid(conversationId)) return;
 
-      const convo = await Conversation.findById(conversationId).select(
-        "members"
-      );
+      const convo =
+        await Conversation.findById(conversationId).select("members");
       if (!convo) return;
 
       const isMember = convo.members.some((m) => m.toString() === userId);
@@ -102,8 +101,8 @@ export function initSocket(io) {
         typeof payload === "string" || typeof payload === "number"
           ? String(payload)
           : payload?.conversationId
-          ? String(payload.conversationId)
-          : null;
+            ? String(payload.conversationId)
+            : null;
 
       const atISO =
         typeof payload === "object" && payload?.at
@@ -114,7 +113,7 @@ export function initSocket(io) {
       if (!mongoose.Types.ObjectId.isValid(cid)) return;
 
       const convo = await Conversation.findById(cid).select(
-        "members participants"
+        "members participants",
       );
       if (!convo) return;
 
@@ -124,6 +123,12 @@ export function initSocket(io) {
       const readAt = new Date(atISO);
 
       upsertLastRead(convo, new mongoose.Types.ObjectId(userId), readAt);
+      //  clear manual unread badge (Option B)
+      const p = (convo.participants || []).find(
+        (x) => x.userId?.toString() === userId.toString(),
+      );
+      if (p) p.unreadExtra = 0;
+
       await convo.save();
 
       for (const memberId of convo.members) {
@@ -144,9 +149,8 @@ export function initSocket(io) {
     socket.on("typing:start", async ({ conversationId }) => {
       if (!mongoose.Types.ObjectId.isValid(conversationId)) return;
 
-      const convo = await Conversation.findById(conversationId).select(
-        "members"
-      );
+      const convo =
+        await Conversation.findById(conversationId).select("members");
       if (!convo) return;
 
       const isMember = convo.members.some((m) => m.toString() === userId);
@@ -188,9 +192,8 @@ export function initSocket(io) {
     socket.on("typing:stop", async ({ conversationId }) => {
       if (!mongoose.Types.ObjectId.isValid(conversationId)) return;
 
-      const convo = await Conversation.findById(conversationId).select(
-        "members"
-      );
+      const convo =
+        await Conversation.findById(conversationId).select("members");
       if (!convo) return;
 
       const isMember = convo.members.some((m) => m.toString() === userId);
@@ -229,13 +232,13 @@ export function initSocket(io) {
           if (!isMember) return;
 
           const msg = await Message.findById(mid).select(
-            "conversationId reactions"
+            "conversationId reactions",
           );
           if (!msg || String(msg.conversationId) !== cid) return;
 
           const uid = String(userId);
           const idx = (msg.reactions || []).findIndex(
-            (r) => String(r.userId) === uid
+            (r) => String(r.userId) === uid,
           );
 
           if (idx !== -1 && msg.reactions[idx].emoji === em) {
@@ -265,14 +268,14 @@ export function initSocket(io) {
           for (const memberId of convo.members) {
             io.to(`user:${memberId.toString()}`).emit(
               "message:reaction",
-              payload
+              payload,
             );
           }
         } catch (e) {
           console.error("message:react error:", e?.message || e);
           ack?.({ ok: false });
         }
-      }
+      },
     );
 
     socket.on(
@@ -296,7 +299,7 @@ export function initSocket(io) {
           if (!isMember) return ack?.({ ok: false, error: "FORBIDDEN" });
 
           const msg = await Message.findById(mid).select(
-            "conversationId senderId isRecalled"
+            "conversationId senderId isRecalled",
           );
           if (!msg || String(msg.conversationId) !== cid)
             return ack?.({ ok: false, error: "NO_MSG" });
@@ -321,14 +324,14 @@ export function initSocket(io) {
           for (const memberId of convo.members) {
             io.to(`user:${memberId.toString()}`).emit(
               "message:edited",
-              payload
+              payload,
             );
           }
         } catch (e) {
           console.error("message:edit error:", e?.message || e);
           ack?.({ ok: false, error: "SERVER_ERROR" });
         }
-      }
+      },
     );
 
     socket.on("message:recall", async ({ conversationId, messageId }, ack) => {
@@ -348,7 +351,7 @@ export function initSocket(io) {
         if (!isMember) return ack?.({ ok: false, error: "FORBIDDEN" });
 
         const msg = await Message.findById(mid).select(
-          "conversationId senderId"
+          "conversationId senderId",
         );
         if (!msg || String(msg.conversationId) !== cid)
           return ack?.({ ok: false, error: "NO_MSG" });
@@ -380,7 +383,7 @@ export function initSocket(io) {
         for (const memberId of convo.members) {
           io.to(`user:${memberId.toString()}`).emit(
             "message:recalled",
-            payload
+            payload,
           );
         }
       } catch (e) {
@@ -406,7 +409,7 @@ export function initSocket(io) {
         if (!isMember) return ack?.({ ok: false, error: "FORBIDDEN" });
 
         const msg = await Message.findById(mid).select(
-          "conversationId pinned pinnedAt pinnedBy"
+          "conversationId pinned pinnedAt pinnedBy",
         );
         if (!msg || String(msg.conversationId) !== cid)
           return ack?.({ ok: false, error: "NO_MSG" });
@@ -516,7 +519,7 @@ export function initSocket(io) {
         try {
           await Conversation.updateOne(
             { _id: conversationId },
-            { $pull: { hiddenFor: { $in: convo.members } } }
+            { $pull: { hiddenFor: { $in: convo.members } } },
           );
         } catch (e) {}
 
@@ -634,7 +637,7 @@ export function initSocket(io) {
           avatarUrl: socket.user.avatarUrl || null,
           typing: false,
         });
-      }
+      },
     );
 
     socket.on("disconnect", () => {

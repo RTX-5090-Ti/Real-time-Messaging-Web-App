@@ -38,6 +38,30 @@ export const formatSystemText = (system, fallbackText, meId) => {
     return `${actorName} added ${targetName} to the group`;
   }
 
+  // ✅ A removed B / A removed you (kick)
+  if (type === "member_removed") {
+    if (targetId && me && targetId === me) {
+      return `${actorName} removed you from the group`;
+    }
+    return `${actorName} removed ${targetName} from the group`;
+  }
+
+  // ✅ A promoted B to admin / A promoted you to admin
+  if (type === "admin_promoted") {
+    if (targetId && me && targetId === me) {
+      return `${actorName} promoted you to admin`;
+    }
+    return `${actorName} promoted ${targetName} to admin`;
+  }
+
+  // ✅ A removed admin role from B / removed your admin role
+  if (type === "admin_removed") {
+    if (targetId && me && targetId === me) {
+      return `${actorName} removed your admin role`;
+    }
+    return `${actorName} removed admin role from ${targetName}`;
+  }
+
   // ✅ A left / You left
   if (type === "member_left") {
     if (actorId && me && actorId === me) return `You left the group`;

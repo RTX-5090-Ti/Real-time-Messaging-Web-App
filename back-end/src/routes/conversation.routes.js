@@ -12,6 +12,10 @@ import {
   deleteConversationForMe,
   leaveGroup,
   addGroupMember,
+  kickGroupMember,
+  makeGroupAdmin,
+  removeGroupAdmin,
+  updateGroupProfile,
 } from "../controllers/conversation.controller.js";
 
 const router = Router();
@@ -24,7 +28,7 @@ router.post(
   requireAuth,
   createDirectRules,
   validate,
-  createOrGetDirect
+  createOrGetDirect,
 );
 
 router.post("/group", requireAuth, createGroupRules, validate, createGroup);
@@ -32,5 +36,14 @@ router.post("/group", requireAuth, createGroupRules, validate, createGroup);
 router.post("/:id/leave", requireAuth, leaveGroup);
 
 router.post("/:id/members", requireAuth, addGroupMember);
+
+//  Kick member (Owner only)
+router.delete("/:id/members/:userId", requireAuth, kickGroupMember);
+
+//  Admin controls (Owner only - chuẩn bị sẵn)
+router.post("/:id/admins/:userId", requireAuth, makeGroupAdmin);
+router.delete("/:id/admins/:userId", requireAuth, removeGroupAdmin);
+
+router.patch("/:id/profile", requireAuth, updateGroupProfile);
 
 export default router;

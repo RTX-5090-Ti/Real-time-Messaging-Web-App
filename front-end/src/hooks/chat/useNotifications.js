@@ -22,10 +22,11 @@ export function useNotifications({ me, onlineSet, setFriends }) {
   const makeUser = (u) =>
     u
       ? {
-          id: String(u.id),
+          id: String(u.id || u._id || ""),
           name: u.name || "User",
           email: u.email || "",
-          avatar: avatarFromName(u.name || "User"),
+          avatarUrl: u.avatarUrl || null,
+          avatar: u.avatarUrl || u.avatar || avatarFromName(u.name || "User"),
         }
       : null;
 
@@ -55,7 +56,8 @@ export function useNotifications({ me, onlineSet, setFriends }) {
           id: String(r.from.id),
           name: r.from.name,
           email: r.from.email,
-          avatar: avatarFromName(r.from.name),
+          avatarUrl: r.from.avatarUrl || null,
+          avatar: r.from.avatarUrl || avatarFromName(r.from.name),
         },
         createdAt: r.createdAt,
       }));
@@ -120,7 +122,7 @@ export function useNotifications({ me, onlineSet, setFriends }) {
           !(
             n.type === "friend_request" &&
             String(n.requestId) === String(requestId)
-          )
+          ),
       );
 
       const exists = filtered.some((n) => keyOfNoti(n) === keyOfNoti(item));
@@ -134,7 +136,8 @@ export function useNotifications({ me, onlineSet, setFriends }) {
   const acceptRequest = async (requestId) => {
     const req = notiItems.find(
       (n) =>
-        n.type === "friend_request" && String(n.requestId) === String(requestId)
+        n.type === "friend_request" &&
+        String(n.requestId) === String(requestId),
     );
     const fromUser = req?.from || null;
 
@@ -147,7 +150,8 @@ export function useNotifications({ me, onlineSet, setFriends }) {
   const rejectRequest = async (requestId) => {
     const req = notiItems.find(
       (n) =>
-        n.type === "friend_request" && String(n.requestId) === String(requestId)
+        n.type === "friend_request" &&
+        String(n.requestId) === String(requestId),
     );
     const fromUser = req?.from || null;
 
@@ -172,7 +176,8 @@ export function useNotifications({ me, onlineSet, setFriends }) {
           ? {
               ...data.user,
               id: String(data.user.id),
-              avatar: avatarFromName(data.user.name),
+              avatarUrl: data.user.avatarUrl || null,
+              avatar: data.user.avatarUrl || avatarFromName(data.user.name),
             }
           : null,
         incomingRequestId: data.incomingRequestId
@@ -195,13 +200,16 @@ export function useNotifications({ me, onlineSet, setFriends }) {
     const type = payload?.type;
     if (!type) return;
 
+    const data = payload?.data || null;
+
     const item = {
-      id: String(payload.requestId || Date.now()),
+      id: String(payload.id || payload.requestId || Date.now()),
       requestId: payload.requestId ? String(payload.requestId) : null,
       type,
       createdAt: payload.createdAt || new Date().toISOString(),
-      from: payload.from ? makeUser(payload.from) : null,
-      by: payload.by ? makeUser(payload.by) : null,
+      data, // ✅ giữ data để dropdown đọc conversationName
+      from: makeUser(payload.from || data?.from),
+      by: makeUser(payload.by || data?.by),
       readAt: notiOpenRef.current ? new Date().toISOString() : null,
     };
 
@@ -212,7 +220,7 @@ export function useNotifications({ me, onlineSet, setFriends }) {
           (x) =>
             x.type === item.type &&
             x.requestId &&
-            x.requestId === item.requestId
+            x.requestId === item.requestId,
         )
       ) {
         return prev;
@@ -263,7 +271,7 @@ export function useNotifications({ me, onlineSet, setFriends }) {
       searchUserByEmail,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [me?.id, onlineSet, notiItems]
+    [me?.id, onlineSet, notiItems],
   );
 
   return {

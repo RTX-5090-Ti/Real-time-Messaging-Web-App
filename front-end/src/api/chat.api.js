@@ -67,4 +67,17 @@ export const ChatAPI = {
 
   addGroupMember: (conversationId, userId) =>
     api.post(`/conversations/${conversationId}/members`, { userId }),
+
+  // ✅ NEW: Kick / Admin
+  kickGroupMember: (conversationId, userId) =>
+    api.delete(`/conversations/${conversationId}/members/${userId}`),
+
+  makeGroupAdmin: (conversationId, userId) =>
+    api.post(`/conversations/${conversationId}/admins/${userId}`),
+
+  removeGroupAdmin: (conversationId, userId) =>
+    api.delete(`/conversations/${conversationId}/admins/${userId}`),
+
+  updateGroupProfile: (conversationId, body) =>
+    api.patch(`/conversations/${conversationId}/profile`, body),
 };

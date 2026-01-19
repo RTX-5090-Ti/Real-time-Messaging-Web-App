@@ -83,7 +83,7 @@ export function useChatSocket({
             ...c,
             lastMessage: uiSys.text || "Message",
             time: uiSys.time,
-          }))
+          })),
         );
 
         return; // ✅ system xong là dừng
@@ -139,7 +139,7 @@ export function useChatSocket({
         if (incomingClientId) {
           const tmpId = `tmp:${incomingClientId}`;
           const idx = list.findIndex(
-            (m) => m.id === tmpId || m.clientId === incomingClientId
+            (m) => m.id === tmpId || m.clientId === incomingClientId,
           );
           if (idx !== -1) {
             // revoke blob urls (nếu có)
@@ -272,7 +272,7 @@ export function useChatSocket({
             if (String(f.id) !== uid) return f;
             const nextAvatar = avatarUrl || avatarFromName(f.name || "User");
             return { ...f, avatarUrl: avatarUrl || null, avatar: nextAvatar };
-          })
+          }),
         );
       }
 
@@ -328,7 +328,7 @@ export function useChatSocket({
 
       // 3) reload conversations để sidebar/list cuộc trò chuyện + conversation info cập nhật avatar mới
       if (typeof reloadConversations === "function")
-        reloadConversationsRef.current?.();
+        reloadConversationsRef.current?.(String(meId));
     };
 
     const onConversationRead = ({ conversationId, userId, at }) => {

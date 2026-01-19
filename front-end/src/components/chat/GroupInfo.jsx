@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import ImageLightboxModal from "./ImageLightboxModal.jsx";
 import ConfirmModal from "./ConfirmModal.jsx";
 
@@ -6,7 +6,7 @@ const isGifUrl = (url) => /\.(gif)(\?|$)/i.test(String(url || ""));
 
 function Section({ title, right, open, onToggle, children }) {
   return (
-    <div className="overflow-hidden border rounded-2xl border-zinc-200">
+    <div className="relative overflow-visible border rounded-2xl border-zinc-200">
       <button
         type="button"
         onClick={onToggle}
@@ -137,6 +137,14 @@ export default function GroupInfo({
   onOpenProfile,
   onLeaveGroup,
   onAddMember,
+
+  // ✅ NEW props (ChatPage pass vào)
+  meId,
+  onKickMember,
+  onMakeAdmin,
+  onRemoveAdmin,
+  onUpdateGroupName,
+  onUpdateGroupAvatar,
 }) {
   const [mediaOpen, setMediaOpen] = useState(true);
   const [fileOpen, setFileOpen] = useState(true);
@@ -152,13 +160,111 @@ export default function GroupInfo({
   const fileItems = groupInfo?.fileItems || [];
 
   const members = groupInfo?.members || [];
-  const adminIds = groupInfo?.adminIds || []; // (step 3.3 tao sẽ add backend)
+
+  // ✅ admins + ownerId (để hiển thị đúng quyền)
+  // ✅ admins + ownerId (đọc từ chat._raw vì mapConversationsToChats gói data ở đó)
+  const adminIds =
+    groupInfo?.adminIds || chat?._raw?.adminIds || chat?._raw?.admins || [];
+
+  const ownerId =
+    groupInfo?.createdBy ||
+    chat?._raw?.createdBy ||
+    groupInfo?.ownerId ||
+    chat?._raw?.ownerId ||
+    null;
+
+  const isGroup = String(chat?.type || "") === "group";
+
+  const isOwner = ownerId && meId && String(ownerId) === String(meId);
+
+  const adminSet = useMemo(
+    () => new Set((adminIds || []).map(String)),
+    [adminIds],
+  );
+
+  const isMeAdmin = !!meId && adminSet.has(String(meId));
+
+  // ✅ Owner + Admin kick được
+  const canKick = isOwner || isMeAdmin;
+
+  // ✅ Chỉ Owner mới make/remove admin
+  const canSetAdmin = isOwner;
+
+  // ✅ Owner/Admin mới edit name + avatar
+  const canEditGroup = isGroup && (isOwner || isMeAdmin);
+
+  // ===== Edit group name =====
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(name);
+  const [busyName, setBusyName] = useState(false);
+
+  // ===== Edit group avatar =====
+  const fileRef = useRef(null);
+  const [busyAvatar, setBusyAvatar] = useState(false);
+
+  // ✅ sync draft khi đổi conversation
+  useEffect(() => {
+    setEditingName(false);
+    setNameDraft(name);
+  }, [chat?.id, name]);
 
   const [lightboxSrc, setLightboxSrc] = useState(null);
 
   const [leaveOpen, setLeaveOpen] = useState(false);
   const [leaveLoading, setLeaveLoading] = useState(false);
-  const isGroup = String(chat?.type || "") === "group";
+
+  // ✅ Kick confirm modal
+  const [kickOpen, setKickOpen] = useState(false);
+  const [kickLoading, setKickLoading] = useState(false);
+  const [kickTarget, setKickTarget] = useState(null);
+
+  const startEditName = () => {
+    if (!canEditGroup) return;
+    setNameDraft(name);
+    setEditingName(true);
+  };
+
+  const cancelEditName = () => {
+    setEditingName(false);
+    setNameDraft(name);
+  };
+
+  const submitEditName = async () => {
+    if (!canEditGroup || busyName) return;
+    const next = String(nameDraft || "").trim();
+    if (!next || next === name) {
+      cancelEditName();
+      return;
+    }
+
+    try {
+      setBusyName(true);
+      await onUpdateGroupName?.(next);
+      setEditingName(false);
+    } finally {
+      setBusyName(false);
+    }
+  };
+
+  const triggerPickAvatar = (e) => {
+    e?.stopPropagation?.();
+    if (!canEditGroup || busyAvatar) return;
+    fileRef.current?.click();
+  };
+
+  const onPickAvatarFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !canEditGroup) return;
+
+    try {
+      setBusyAvatar(true);
+      await onUpdateGroupAvatar?.(file);
+    } finally {
+      setBusyAvatar(false);
+      // reset để chọn lại cùng 1 file vẫn trigger change
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
 
   const mediaRight = useMemo(() => {
     const total = Number(counts.mediaTotal ?? mediaItems.length) || 0;
@@ -175,8 +281,18 @@ export default function GroupInfo({
     return total ? `(${total})` : "(0)";
   }, [members.length]);
 
+  // log ra xem có phải là admin hay không
+
   return (
     <>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={onPickAvatarFile}
+      />
+
       {/* MOBILE overlay */}
       <div
         className={[
@@ -206,34 +322,103 @@ export default function GroupInfo({
           </div>
 
           <div className="p-5 space-y-5 overflow-y-auto">
-            {/* TOP: avatar + name (style giống Sidebar, nhưng tone theo nền trắng) */}
             <div className="flex flex-col items-center gap-3">
-              <button
-                type="button"
-                // Chỗ này
-                onClick={() => onOpenProfile?.()}
-                className="w-20 h-20 rounded-full overflow-hidden cursor-pointer transition outline-none focus:outline-none focus:ring-0 hover:bg-zinc-50 hover:shadow-[0_0_0_3px_rgba(0,0,0,0.08)]"
-                title="Open profile"
-              >
-                {avatar ? (
-                  <img
-                    src={avatar}
-                    alt={name}
-                    className="object-cover w-full h-full"
-                  />
-                ) : (
-                  <div className="grid w-full h-full place-items-center bg-zinc-100 text-zinc-600">
-                    🙂
+              {/* Avatar + camera overlay */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => onOpenProfile?.()}
+                  className="w-20 h-20 rounded-full overflow-hidden cursor-pointer transition outline-none focus:outline-none focus:ring-0 hover:bg-zinc-50 hover:shadow-[0_0_0_3px_rgba(0,0,0,0.08)]"
+                  title="Open profile"
+                >
+                  {avatar ? (
+                    <img
+                      src={avatar}
+                      alt={name}
+                      className="object-cover w-full h-full"
+                    />
+                  ) : (
+                    <div className="grid w-full h-full place-items-center bg-zinc-100 text-zinc-600">
+                      🙂
+                    </div>
+                  )}
+                </button>
+
+                {/* ✅ camera icon inside avatar */}
+                {isGroup && canEditGroup ? (
+                  <button
+                    type="button"
+                    onClick={triggerPickAvatar}
+                    disabled={busyAvatar}
+                    className="absolute grid bg-white border rounded-full cursor-pointer bottom-1 right-1 w-7 h-7 place-items-center border-zinc-200 text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                    title="Change group avatar"
+                  >
+                    📷
+                  </button>
+                ) : null}
+              </div>
+
+              {/* Name + pencil edit */}
+              {isGroup ? (
+                editingName ? (
+                  <div className="flex items-center justify-center w-full gap-2">
+                    <input
+                      value={nameDraft}
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") submitEditName();
+                        if (e.key === "Escape") cancelEditName();
+                      }}
+                      className="h-9 w-[220px] px-3 text-sm border rounded-xl border-zinc-200 outline-none focus:ring-2 focus:ring-violet-200"
+                      placeholder="Group name..."
+                      autoFocus
+                      disabled={busyName}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={submitEditName}
+                      disabled={busyName}
+                      className="grid border cursor-pointer w-9 h-9 rounded-xl place-items-center border-zinc-200 hover:bg-zinc-50 disabled:opacity-60"
+                      title="Save"
+                    >
+                      ✓
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={cancelEditName}
+                      disabled={busyName}
+                      className="grid border cursor-pointer w-9 h-9 rounded-xl place-items-center border-zinc-200 hover:bg-zinc-50 disabled:opacity-60"
+                      title="Cancel"
+                    >
+                      ✕
+                    </button>
                   </div>
-                )}
-              </button>
+                ) : (
+                  <div className="flex items-center justify-center gap-2">
+                    <p className="text-lg font-bold text-center text-zinc-900">
+                      {name}
+                    </p>
 
-              <p className="text-lg font-bold text-center text-zinc-900">
-                {name}
-              </p>
+                    {canEditGroup ? (
+                      <button
+                        type="button"
+                        onClick={startEditName}
+                        className="grid border cursor-pointer w-9 h-9 rounded-xl place-items-center border-zinc-200 hover:bg-zinc-50 text-zinc-700"
+                        title="Edit name"
+                      >
+                        ✎
+                      </button>
+                    ) : null}
+                  </div>
+                )
+              ) : (
+                <p className="text-lg font-bold text-center text-zinc-900">
+                  {name}
+                </p>
+              )}
             </div>
-
-            {/* Sections */}
 
             <Section
               title="Members"
@@ -244,7 +429,18 @@ export default function GroupInfo({
               <MemberList
                 items={members}
                 adminIds={adminIds}
+                meId={meId}
+                ownerId={ownerId}
                 onOpenProfile={onOpenProfile}
+                onRequestKick={(m) => {
+                  setKickTarget(m);
+                  setKickOpen(true);
+                }}
+                onMakeAdmin={onMakeAdmin}
+                onRemoveAdmin={onRemoveAdmin}
+                // ✅ owner-only actions (như rule mày muốn)
+                canKick={canKick}
+                canSetAdmin={canSetAdmin}
               />
 
               {String(chat?.type) === "group" &&
@@ -316,7 +512,6 @@ export default function GroupInfo({
           open ? "w-[330px] border-l border-zinc-200" : "w-0 border-l-0",
         ].join(" ")}
       >
-        {/* container cố định 330 để content không bị co méo */}
         <div
           className={[
             "w-[330px] h-full flex flex-col",
@@ -340,29 +535,101 @@ export default function GroupInfo({
 
           <div className="p-5 space-y-5 overflow-y-auto">
             <div className="flex flex-col items-center gap-3">
-              <button
-                type="button"
-                // Chỗ này
-                onClick={() => onOpenProfile?.()}
-                className="w-20 h-20 rounded-full overflow-hidden cursor-pointer transition outline-none focus:outline-none focus:ring-0 hover:bg-zinc-50 hover:shadow-[0_0_0_3px_rgba(0,0,0,0.08)]"
-                title="Open profile"
-              >
-                {avatar ? (
-                  <img
-                    src={avatar}
-                    alt={name}
-                    className="object-cover w-full h-full"
-                  />
-                ) : (
-                  <div className="grid w-full h-full place-items-center bg-zinc-100 text-zinc-600">
-                    🙂
-                  </div>
-                )}
-              </button>
+              {/* Avatar + camera overlay */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => onOpenProfile?.()}
+                  className="w-20 h-20 rounded-full overflow-hidden cursor-pointer transition outline-none focus:outline-none focus:ring-0 hover:bg-zinc-50 hover:shadow-[0_0_0_3px_rgba(0,0,0,0.08)]"
+                  title="Open profile"
+                >
+                  {avatar ? (
+                    <img
+                      src={avatar}
+                      alt={name}
+                      className="object-cover w-full h-full"
+                    />
+                  ) : (
+                    <div className="grid w-full h-full place-items-center bg-zinc-100 text-zinc-600">
+                      🙂
+                    </div>
+                  )}
+                </button>
 
-              <p className="text-lg font-bold text-center text-zinc-900">
-                {name}
-              </p>
+                {/* ✅ camera icon inside avatar */}
+                {isGroup && canEditGroup ? (
+                  <button
+                    type="button"
+                    onClick={triggerPickAvatar}
+                    disabled={busyAvatar}
+                    className="absolute grid bg-white border rounded-full cursor-pointer bottom-1 right-1 w-7 h-7 place-items-center border-zinc-200 text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                    title="Change group avatar"
+                  >
+                    📷
+                  </button>
+                ) : null}
+              </div>
+
+              {/* Name + pencil edit */}
+              {isGroup ? (
+                editingName ? (
+                  <div className="flex items-center justify-center w-full gap-2">
+                    <input
+                      value={nameDraft}
+                      onChange={(e) => setNameDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") submitEditName();
+                        if (e.key === "Escape") cancelEditName();
+                      }}
+                      className="h-9 w-[220px] px-3 text-sm border rounded-xl border-zinc-200 outline-none focus:ring-2 focus:ring-violet-200"
+                      placeholder="Group name..."
+                      autoFocus
+                      disabled={busyName}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={submitEditName}
+                      disabled={busyName}
+                      className="grid border cursor-pointer w-9 h-9 rounded-xl place-items-center border-zinc-200 hover:bg-zinc-50 disabled:opacity-60"
+                      title="Save"
+                    >
+                      ✓
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={cancelEditName}
+                      disabled={busyName}
+                      className="grid border cursor-pointer w-9 h-9 rounded-xl place-items-center border-zinc-200 hover:bg-zinc-50 disabled:opacity-60"
+                      title="Cancel"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2">
+                    <p className="text-lg font-bold text-center text-zinc-900">
+                      {name}
+                    </p>
+
+                    {canEditGroup ? (
+                      <button
+                        type="button"
+                        onClick={startEditName}
+                        className="grid border cursor-pointer w-9 h-9 rounded-xl place-items-center border-zinc-200 hover:bg-zinc-50 text-zinc-700"
+                        title="Edit name"
+                      >
+                        ✎
+                      </button>
+                    ) : null}
+                  </div>
+                )
+              ) : (
+                <p className="text-lg font-bold text-center text-zinc-900">
+                  {name}
+                </p>
+              )}
             </div>
 
             <Section
@@ -374,7 +641,17 @@ export default function GroupInfo({
               <MemberList
                 items={members}
                 adminIds={adminIds}
+                meId={meId}
+                ownerId={ownerId}
                 onOpenProfile={onOpenProfile}
+                onRequestKick={(m) => {
+                  setKickTarget(m);
+                  setKickOpen(true);
+                }}
+                onMakeAdmin={onMakeAdmin}
+                onRemoveAdmin={onRemoveAdmin}
+                canKick={canKick}
+                canSetAdmin={canSetAdmin}
               />
 
               {String(chat?.type) === "group" &&
@@ -425,14 +702,6 @@ export default function GroupInfo({
               <FileList items={fileItems} />
             </Section>
 
-            {/* <button
-              type="button"
-              onClick={onLeaveGroup}
-              className="w-full h-10 text-sm font-semibold text-red-600 border border-red-200 cursor-pointer rounded-xl hover:bg-red-50"
-            >
-              Leave group
-            </button> */}
-
             {isGroup ? (
               <button
                 type="button"
@@ -452,6 +721,7 @@ export default function GroupInfo({
         onClose={() => setLightboxSrc(null)}
       />
 
+      {/* ✅ Leave confirm */}
       <ConfirmModal
         open={leaveOpen}
         title="Leave group?"
@@ -472,11 +742,50 @@ export default function GroupInfo({
           }
         }}
       />
+
+      {/* ✅ Kick confirm */}
+      <ConfirmModal
+        open={kickOpen}
+        title={`Kick ${kickTarget?.name || "member"}?`}
+        description="They will be removed from this group."
+        cancelText="Cancel"
+        confirmText="Kick"
+        loading={kickLoading}
+        onCancel={() => {
+          if (!kickLoading) setKickOpen(false);
+        }}
+        onConfirm={async () => {
+          try {
+            setKickLoading(true);
+            // onKickMember(userId, memberObj)
+            await onKickMember?.(
+              String(kickTarget?.id || kickTarget?._id || ""),
+              kickTarget,
+            );
+            setKickOpen(false);
+          } finally {
+            setKickLoading(false);
+          }
+        }}
+      />
     </>
   );
 }
 
-function MemberList({ items, adminIds = [], onOpenProfile }) {
+function MemberList({
+  items,
+  adminIds = [],
+  onOpenProfile,
+  meId,
+  ownerId,
+  onRequestKick,
+  onMakeAdmin,
+  onRemoveAdmin,
+  canKick = false,
+  canSetAdmin = false,
+}) {
+  const [openMenuId, setOpenMenuId] = useState(null);
+
   if (!items?.length) {
     return (
       <div className="px-3 py-3 text-sm border rounded-2xl border-zinc-200 bg-zinc-50 text-zinc-500">
@@ -486,43 +795,173 @@ function MemberList({ items, adminIds = [], onOpenProfile }) {
   }
 
   const adminSet = new Set((adminIds || []).map(String));
+  const my = String(meId || "");
+  const owner = String(ownerId || "");
+
+  const pickId = (m) => String(m?.id || m?._id || "");
 
   return (
     <div className="pt-3 space-y-2">
+      {/* click outside to close menu */}
+      {openMenuId ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-[155] cursor-default"
+          onClick={() => setOpenMenuId(null)}
+        />
+      ) : null}
+
       {items.map((m) => {
-        const isAdmin = adminSet.has(String(m.id));
+        const mid = pickId(m);
+        const isAdmin = adminSet.has(mid);
+        const isMe = mid && my && mid === my;
+        const isOwnerMember = mid && owner && mid === owner;
+
+        const isOwnerMe = my && owner && my === owner;
+
+        // ✅ Admin kick được member thường, nhưng:
+        // - không kick chính mình
+        // - không kick owner
+        // - admin không kick admin khác (chỉ owner kick admin)
+        const showKick =
+          canKick && !isMe && !isOwnerMember && (isOwnerMe || !isAdmin);
+
+        const showAdminActions = canSetAdmin && !isOwnerMember;
 
         return (
-          <button
-            key={String(m.id)}
-            type="button"
-            className="flex items-center w-full gap-3 p-3 text-left border cursor-pointer rounded-2xl border-zinc-200 hover:bg-zinc-50"
-            onClick={() => onOpenProfile?.(String(m.id), m)}
-            title="Open profile"
+          <div
+            key={mid || m.email || m.name}
+            className={[
+              "relative flex items-center w-full gap-3 p-3 border rounded-2xl border-zinc-200 bg-white hover:bg-zinc-50",
+              openMenuId === mid ? "z-[200]" : "z-0",
+            ].join(" ")}
           >
-            <img
-              src={m.avatar}
-              alt={m.name}
-              className="object-cover w-10 h-10 rounded-full shrink-0"
-            />
+            {/* left area: open profile */}
+            <button
+              type="button"
+              className="flex items-center flex-1 min-w-0 gap-3 text-left cursor-pointer"
+              onClick={() => onOpenProfile?.(mid, m)}
+              title="Open profile"
+            >
+              {m?.avatarUrl || m?.avatar ? (
+                <img
+                  src={m.avatarUrl || m.avatar}
+                  alt={m.name}
+                  className="object-cover w-10 h-10 rounded-full shrink-0"
+                />
+              ) : (
+                <div className="grid w-10 h-10 rounded-full shrink-0 place-items-center bg-zinc-100 text-zinc-600">
+                  🙂
+                </div>
+              )}
 
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="font-semibold truncate text-zinc-900">{m.name}</p>
-                {isAdmin ? (
-                  <span className="px-2 py-0.5 text-[11px] rounded-full bg-violet-100 text-violet-700 shrink-0">
-                    Admin
-                  </span>
+              <div className="flex-1 min-w-0">
+                <div className="grid items-center gap-2 min-w-0 w-full grid-cols-[minmax(0,1fr)_auto]">
+                  {/* Name */}
+                  <p className="min-w-0 font-semibold truncate text-zinc-900">
+                    {m?.name || "Member"}
+                  </p>
+
+                  {/* Badges */}
+                  <div className="flex items-center gap-1 shrink-0 ">
+                    {isOwnerMember ? (
+                      <span className="px-2 py-0.5 text-[11px] rounded-full bg-amber-100 text-amber-700 whitespace-nowrap">
+                        Owner
+                      </span>
+                    ) : null}
+
+                    {isAdmin ? (
+                      <span className="px-2 py-0.5 text-[11px] rounded-full bg-violet-100 text-violet-700 whitespace-nowrap">
+                        Admin
+                      </span>
+                    ) : null}
+
+                    {isMe ? (
+                      <span className="px-2 py-0.5 text-[11px] rounded-full bg-zinc-100 text-zinc-700 whitespace-nowrap">
+                        You
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
+                <p className="text-xs truncate text-zinc-500">
+                  {m.email || m.role || "Member"}
+                </p>
+              </div>
+            </button>
+
+            {/* ⋯ actions */}
+            <button
+              type="button"
+              className="grid cursor-pointer w-9 h-9 rounded-xl place-items-center hover:bg-zinc-100 text-zinc-700"
+              title="More"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenMenuId((prev) => (prev === mid ? null : mid));
+              }}
+            >
+              ⋯
+            </button>
+
+            {/* Dropdown menu */}
+            {openMenuId === mid ? (
+              <div className="absolute right-3 top-[56px] z-[170] w-48 p-1 bg-white border shadow-lg rounded-xl border-zinc-200">
+                <button
+                  type="button"
+                  className="w-full px-3 py-2 text-sm text-left rounded-lg cursor-pointer hover:bg-zinc-50"
+                  onClick={() => {
+                    setOpenMenuId(null);
+                    onOpenProfile?.(mid, m);
+                  }}
+                >
+                  View profile
+                </button>
+
+                {/* Admin actions (chuẩn bị sẵn) */}
+                {showAdminActions &&
+                typeof onMakeAdmin === "function" &&
+                typeof onRemoveAdmin === "function" ? (
+                  isAdmin ? (
+                    <button
+                      type="button"
+                      className="w-full px-3 py-2 text-sm text-left rounded-lg cursor-pointer hover:bg-zinc-50"
+                      onClick={async () => {
+                        setOpenMenuId(null);
+                        await onRemoveAdmin?.(mid, m);
+                      }}
+                    >
+                      Remove admin
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="w-full px-3 py-2 text-sm text-left rounded-lg cursor-pointer hover:bg-zinc-50"
+                      onClick={async () => {
+                        setOpenMenuId(null);
+                        await onMakeAdmin?.(mid, m);
+                      }}
+                    >
+                      Make admin
+                    </button>
+                  )
+                ) : null}
+
+                {/* Kick */}
+                {showKick ? (
+                  <button
+                    type="button"
+                    className="w-full px-3 py-2 text-sm text-left text-red-600 rounded-lg cursor-pointer hover:bg-red-50"
+                    onClick={() => {
+                      setOpenMenuId(null);
+                      onRequestKick?.(m);
+                    }}
+                  >
+                    Kick member
+                  </button>
                 ) : null}
               </div>
-
-              <p className="text-xs truncate text-zinc-500">
-                {m.email || m.role || "Member"}
-              </p>
-            </div>
-
-            <span className="text-xs text-zinc-500">›</span>
-          </button>
+            ) : null}
+          </div>
         );
       })}
     </div>

@@ -9,8 +9,9 @@ const participantSchema = new mongoose.Schema(
     },
     lastReadAt: { type: Date, default: null },
     clearedAt: { type: Date, default: null },
+    unreadExtra: { type: Number, default: 0 },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const conversationSchema = new mongoose.Schema(
@@ -40,13 +41,13 @@ const conversationSchema = new mongoose.Schema(
     directKey: { type: String, default: null },
     participants: { type: [participantSchema], default: [] },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // direct unique key
 conversationSchema.index(
   { type: 1, directKey: 1 },
-  { unique: true, sparse: true }
+  { unique: true, sparse: true },
 );
 
 // speed up query by members

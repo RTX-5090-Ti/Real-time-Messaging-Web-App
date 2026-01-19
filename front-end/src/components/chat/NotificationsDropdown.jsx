@@ -36,7 +36,7 @@ export default function NotificationsDropdown({
 
   const visibleItems = useMemo(
     () => items.slice(0, visibleCount),
-    [items, visibleCount]
+    [items, visibleCount],
   );
 
   const handleLoadMore = () => {
@@ -86,18 +86,20 @@ export default function NotificationsDropdown({
                       ? "You sent a friend request"
                       : "sent you a friend request"
                     : type === "friend_request_accepted"
-                    ? isMeActor
-                      ? "You accepted a friend request"
-                      : "accepted your friend request"
-                    : type === "friend_request_rejected"
-                    ? isMeActor
-                      ? "You rejected a friend request"
-                      : "rejected your friend request"
-                    : type === "friend_request_accepted_self"
-                    ? "accepted the friend request from"
-                    : type === "friend_request_rejected_self"
-                    ? "rejected the friend request from"
-                    : "notification";
+                      ? isMeActor
+                        ? "You accepted a friend request"
+                        : "accepted your friend request"
+                      : type === "friend_request_rejected"
+                        ? isMeActor
+                          ? "You rejected a friend request"
+                          : "rejected your friend request"
+                        : type === "friend_request_accepted_self"
+                          ? "accepted the friend request from"
+                          : type === "friend_request_rejected_self"
+                            ? "rejected the friend request from"
+                            : type === "kicked_from_group"
+                              ? `removed you from "${n?.data?.conversationName || "a group"}"`
+                              : "notification";
 
                 return (
                   <div

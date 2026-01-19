@@ -299,7 +299,8 @@ export default function ChatPage() {
       name: m.name,
       email: m.email,
       role: m.role,
-      avatar: avatarFromName(m.name || "User"),
+      avatarUrl: m.avatarUrl || null,
+      avatar: m.avatarUrl || m.avatar || avatarFromName(m.name || "User"),
     }));
 
     // ===== derive shared items from messages (images/videos/gifs/files)
@@ -770,34 +771,78 @@ export default function ChatPage() {
   }, [typingByConvo, activeChatId, activeChat?.type]);
 
   // seen-by avatars
+  // ✅ seen-by avatars (direct + group)
   const seenBy = useMemo(() => {
-    if (!activeChatId || !activeChat?.otherUserId) return [];
+    if (!activeChatId) return [];
+
     const list = messagesByChatId[activeChatId] ?? [];
     if (!list.length) return [];
 
+    // Chỉ show seen dưới “tin nhắn cuối cùng” nếu tin đó là của mình
     const last = list[list.length - 1];
-    if (last.from !== "me") return [];
+    if (last?.from !== "me") return [];
 
-    const otherId = String(activeChat.otherUserId);
-    const readAt = lastReadByConvo[activeChatId]?.[otherId];
-    if (!readAt) return [];
-
-    const readMs = new Date(readAt).getTime();
-    const msgMs = new Date(last.createdAt ?? 0).getTime();
+    const msgMs = new Date(last?.createdAt ?? 0).getTime();
     if (!msgMs || Number.isNaN(msgMs)) return [];
 
-    if (readMs >= msgMs) {
+    const readMap = lastReadByConvo[activeChatId] || {};
+    const isGroup = String(activeChat?.type || "direct") === "group";
+
+    // ✅ Direct (1-1): giữ logic cũ
+    if (!isGroup) {
+      const otherId = activeChat?.otherUserId
+        ? String(activeChat.otherUserId)
+        : null;
+      if (!otherId) return [];
+
+      const readAt = readMap[otherId];
+      if (!readAt) return [];
+
+      const readMs = new Date(readAt).getTime();
+      if (readMs < msgMs) return [];
+
       return [
         {
           id: otherId,
-          name: activeChat.name,
-          avatar: activeChat.avatar || avatarFromName(activeChat.name),
+          name: activeChat?.name || "User",
+          avatar:
+            activeChat?.avatar || avatarFromName(activeChat?.name || "User"),
           at: readAt,
         },
       ];
     }
-    return [];
-  }, [activeChatId, activeChat, lastReadByConvo, messagesByChatId]);
+
+    // ✅ Group: lấy từ members + lastReadByConvo
+    const rawMembers = Array.isArray(activeChat?._raw?.members)
+      ? activeChat._raw.members
+      : [];
+
+    const others = rawMembers.filter((m) => String(m?.id) !== String(me?.id));
+
+    const out = [];
+    for (const m of others) {
+      const uid = m?.id ? String(m.id) : null;
+      if (!uid) continue;
+
+      const readAt = readMap[uid];
+      if (!readAt) continue;
+
+      const readMs = new Date(readAt).getTime();
+      if (readMs < msgMs) continue;
+
+      out.push({
+        id: uid,
+        name: m?.name || "User",
+        avatar: m?.avatarUrl || avatarFromName(m?.name || "User"),
+        at: readAt,
+      });
+    }
+
+    // stable order: recently seen first
+    out.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
+    return out;
+  }, [activeChatId, activeChat, me?.id, lastReadByConvo, messagesByChatId]);
 
   const openChatWithFriend = useOpenChatWithFriend({
     meId: me?.id ? String(me.id) : null,
@@ -993,6 +1038,28 @@ export default function ChatPage() {
     setActiveChatId(null);
   };
 
+  const onUpdateGroupName = async (newName) => {
+    if (!activeChatId) return;
+
+    await ChatAPI.updateGroupProfile(String(activeChatId), { name: newName });
+
+    // ✅ PHẢI truyền meId vào
+    await reloadConversations?.(String(me?.id || ""));
+  };
+
+  const onUpdateGroupAvatar = async (file) => {
+    if (!activeChatId) return;
+
+    const { data } = await ChatAPI.uploadSingle(file);
+
+    await ChatAPI.updateGroupProfile(String(activeChatId), {
+      avatar: data.file,
+    });
+
+    // ✅ PHẢI truyền meId vào
+    await reloadConversations?.(String(me?.id || ""));
+  };
+
   return (
     <div className="w-full h-screen p-4 bg-gradient-to-r from-[#b06ab3] to-[#4568dc]">
       <div className="h-full w-full rounded-[28px] overflow-hidden shadow-xl bg-white flex">
@@ -1130,6 +1197,27 @@ export default function ChatPage() {
           }}
           onLeaveGroup={onLeaveGroup}
           onAddMember={onAddMember}
+          meId={me?.id}
+          onKickMember={(userId) => {
+            if (!activeChatId) return;
+            return ChatAPI.kickGroupMember(
+              String(activeChatId),
+              String(userId),
+            );
+          }}
+          onMakeAdmin={(userId) => {
+            if (!activeChatId) return;
+            return ChatAPI.makeGroupAdmin(String(activeChatId), String(userId));
+          }}
+          onRemoveAdmin={(userId) => {
+            if (!activeChatId) return;
+            return ChatAPI.removeGroupAdmin(
+              String(activeChatId),
+              String(userId),
+            );
+          }}
+          onUpdateGroupName={onUpdateGroupName}
+          onUpdateGroupAvatar={onUpdateGroupAvatar}
         />
 
         <SearchFriendModal
