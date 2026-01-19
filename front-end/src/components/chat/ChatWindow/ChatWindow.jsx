@@ -48,11 +48,32 @@ export default function ChatWindow({
         : null;
       const count = rawMembers ? rawMembers.length : Number(chat?.members || 0);
 
-      return count > 0 ? `${count} members` : "Group chat";
+      return (
+        <span className="text-zinc-500">
+          {count > 0 ? `${count} members` : "Group chat"}
+        </span>
+      );
     }
 
-    // ✅ Direct chat: keep Online/Offline
-    return otherOnline ? "Online" : "Offline";
+    // ✅ Direct chat: colored online/offline
+    return (
+      <span className="inline-flex items-center gap-2">
+        <span
+          className={[
+            "inline-block w-2 h-2 rounded-full",
+            otherOnline ? "bg-emerald-500" : "bg-rose-500",
+          ].join(" ")}
+        />
+        <span
+          className={[
+            "text-sm font-medium",
+            otherOnline ? "text-emerald-600" : "text-rose-600",
+          ].join(" ")}
+        >
+          {otherOnline ? "Online" : "Offline"}
+        </span>
+      </span>
+    );
   }, [chat, otherOnline]);
 
   const {
@@ -90,7 +111,7 @@ export default function ChatWindow({
 
   const seenKey = useMemo(
     () => (seenBy || []).map((x) => x.id).join(","),
-    [seenBy]
+    [seenBy],
   );
   const showTypingBubble = !!chat && !!typingText;
 
@@ -114,7 +135,7 @@ export default function ChatWindow({
 
     const tryScroll = () => {
       const el = listRef.current?.querySelector?.(
-        `[data-msg-id="${targetId}"]`
+        `[data-msg-id="${targetId}"]`,
       );
       if (!el) return false;
       el.scrollIntoView({ behavior: "smooth", block: "center" });

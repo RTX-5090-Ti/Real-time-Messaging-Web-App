@@ -21,15 +21,17 @@ export default function ImageLightboxModal({ open, src, alt, onClose }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] ">
+    <div className="fixed inset-0 z-[200]">
+      {/* ✅ Overlay nằm dưới */}
       <div
-        className="absolute inset-0 bg-black/70 z-[200]"
+        className="absolute inset-0 z-0 bg-black/70"
         onClick={() => onClose?.()}
       />
 
+      {/* ✅ Close button nằm trên cùng */}
       <button
         type="button"
-        className="absolute top-4 right-4 z-[210] grid w-10 h-10 text-white rounded-full cursor-pointer place-items-center bg-black/50 hover:bg-black/60"
+        className="absolute z-20 grid w-10 h-10 text-white rounded-full cursor-pointer top-4 right-4 place-items-center bg-black/50 hover:bg-black/60"
         onClick={(e) => {
           e.stopPropagation();
           onClose?.();
@@ -46,7 +48,8 @@ export default function ImageLightboxModal({ open, src, alt, onClose }) {
         </svg>
       </button>
 
-      <div className="absolute inset-0 grid p-6 place-items-center">
+      {/* ✅ Ảnh nằm trên overlay */}
+      <div className="absolute inset-0 z-10 grid p-6 place-items-center">
         <img
           src={src}
           alt={alt || "image"}

@@ -64,6 +64,9 @@ export function useChatComposer({
   const [gifError, setGifError] = useState("");
   const [gifItems, setGifItems] = useState([]);
 
+  // ✅ Sticker picker state
+  const [stickerOpen, setStickerOpen] = useState(false);
+
   // pending item:
   // - image: { id, file, kind:"image", previewUrl:"blob:...", status:"local" }
   // - gif:   { id, kind:"gif", previewUrl:"https://..200w.gif", gif:{...} }
@@ -115,13 +118,14 @@ export function useChatComposer({
 
   // close menus on outside click / ESC
   useEffect(() => {
-    if (!attachOpen && !gifOpen) return;
+    if (!attachOpen && !gifOpen && !stickerOpen) return;
 
     const onDown = (e) => {
       if (!attachWrapRef.current) return;
       if (!attachWrapRef.current.contains(e.target)) {
         setAttachOpen(false);
         setGifOpen(false);
+        setStickerOpen(false);
       }
     };
 
@@ -129,6 +133,7 @@ export function useChatComposer({
       if (e.key === "Escape") {
         setAttachOpen(false);
         setGifOpen(false);
+        setStickerOpen(false);
       }
     };
 
@@ -138,7 +143,7 @@ export function useChatComposer({
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
     };
-  }, [attachOpen, gifOpen]);
+  }, [attachOpen, gifOpen, stickerOpen]);
 
   // reset when switching chat
   useEffect(() => {
@@ -198,13 +203,13 @@ export function useChatComposer({
                     }
                   : null,
               }
-            : x
-        )
+            : x,
+        ),
       );
     } catch (e) {
       console.error("Upload failed:", e);
       setPending((prev) =>
-        prev.map((x) => (x.id === id ? { ...x, status: "error" } : x))
+        prev.map((x) => (x.id === id ? { ...x, status: "error" } : x)),
       );
     }
   };
@@ -302,10 +307,10 @@ export function useChatComposer({
       try {
         const endpoint = q
           ? `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(
-              GIPHY_KEY
+              GIPHY_KEY,
             )}&q=${encodeURIComponent(q)}&limit=24&rating=pg-13`
           : `https://api.giphy.com/v1/gifs/trending?api_key=${encodeURIComponent(
-              GIPHY_KEY
+              GIPHY_KEY,
             )}&limit=24&rating=pg-13`;
 
         const res = await fetch(endpoint);
@@ -357,9 +362,9 @@ export function useChatComposer({
         (p) =>
           p.kind === "image" ||
           p.kind === "gif" ||
-          (p.kind === "file" && p.status === "uploaded" && p.uploaded?.url)
+          (p.kind === "file" && p.status === "uploaded" && p.uploaded?.url),
       ),
-    [pending]
+    [pending],
   );
 
   const canSend = useMemo(() => {
@@ -374,7 +379,7 @@ export function useChatComposer({
     const imageItems = pending.filter((p) => p.kind === "image");
     const gifMetaItems = pending.filter((p) => p.kind === "gif");
     const fileItems = pending.filter(
-      (p) => p.kind === "file" && p.status === "uploaded" && p.uploaded?.url
+      (p) => p.kind === "file" && p.status === "uploaded" && p.uploaded?.url,
     );
 
     const sendFiles = imageItems.map((p) => p.file); // ảnh local -> onSendMessage sẽ upload
@@ -428,6 +433,37 @@ export function useChatComposer({
     stopTyping();
   };
 
+  const sendSticker = (url) => {
+    const u = String(url || "").trim();
+    if (!chat || !u) return;
+
+    if (typeof onSendMessage !== "function") {
+      alert("onSendMessage is missing (cannot send sticker).");
+      return;
+    }
+
+    // đóng panel luôn cho đã
+    setStickerOpen(false);
+    setAttachOpen(false);
+    setGifOpen(false);
+
+    // sticker là URL-only, dùng rawAttachments luôn (backend mày support kind=sticker rồi)
+    onSendMessage({
+      text: "",
+      files: [],
+      gifAttachments: [],
+      rawAttachments: [
+        {
+          kind: "sticker",
+          url: u,
+          name: "sticker",
+          mime: "image/png",
+          size: 0,
+        },
+      ],
+    });
+  };
+
   return {
     // refs
     attachWrapRef,
@@ -458,5 +494,9 @@ export function useChatComposer({
     handleSend,
 
     canSend,
+
+    stickerOpen,
+    setStickerOpen,
+    sendSticker,
   };
 }

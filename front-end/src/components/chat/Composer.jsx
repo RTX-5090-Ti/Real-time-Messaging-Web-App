@@ -1,3 +1,6 @@
+import { useEffect, useRef, useState } from "react";
+import EmojiPicker from "emoji-picker-react";
+
 const prettySize = (bytes) => {
   const n = Number(bytes || 0);
   if (!n) return "";
@@ -42,8 +45,85 @@ export default function Composer({
   handleSend,
 
   canSend,
-  onChooseSticker,
+
+  stickerOpen,
+  setStickerOpen,
+  sendSticker,
 }) {
+  const STICKERS = [
+    // 👇 thay bằng URL Cloudinary của mày
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838652/row-1-column-4_uzqo6m.png",
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838651/row-1-column-3_qmcyaq.png",
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838651/row-1-column-3_qmcyaq.png",
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838653/row-2-column-1_idjuhn.png",
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838654/row-2-column-3_tlpzuw.png",
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838493/row-1-column-1_neqfao.png",
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838653/row-2-column-2_xttvzp.png",
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838655/row-2-column-4_duscyt.png",
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838656/row-3-column-1_slzdoh.png",
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838657/row-3-column-2_ntucyl.png",
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838657/row-3-column-2_ntucyl.png",
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838658/row-3-column-4_vicupf.png",
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838660/row-4-column-2_t46lxr.png",
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838660/row-4-column-3_epnyvr.png",
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838661/row-4-column-4_tqzeop.png",
+    "https://res.cloudinary.com/de93daa94/image/upload/v1768838660/row-4-column-1_xtzfes.png",
+  ];
+
+  const [emojiOpen, setEmojiOpen] = useState(false);
+
+  const emojiBtnRef = useRef(null);
+  const emojiBoxRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const insertAtCursor = (emoji) => {
+    const el = inputRef.current;
+
+    if (!el) {
+      setText((prev) => prev + emoji);
+      if (chat) startTyping?.();
+      return;
+    }
+
+    const start = el.selectionStart ?? text.length;
+    const end = el.selectionEnd ?? text.length;
+
+    const next = text.slice(0, start) + emoji + text.slice(end);
+    setText(next);
+    if (chat) startTyping?.();
+
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + emoji.length;
+      el.setSelectionRange(pos, pos);
+    });
+  };
+
+  // click ngoài / ESC để đóng emoji picker
+  useEffect(() => {
+    if (!emojiOpen) return;
+
+    const onMouseDown = (e) => {
+      const t = e.target;
+
+      if (emojiBoxRef.current?.contains(t)) return;
+      if (emojiBtnRef.current?.contains(t)) return;
+
+      setEmojiOpen(false);
+    };
+
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setEmojiOpen(false);
+    };
+
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [emojiOpen]);
+
   return (
     <div className="p-4 bg-white border-t border-zinc-200">
       <div className="flex items-end gap-3">
@@ -124,7 +204,8 @@ export default function Composer({
               role="menuitem"
               onClick={() => {
                 setAttachOpen(false);
-                onChooseSticker?.();
+                setGifOpen(false);
+                setStickerOpen?.(true);
               }}
               className="flex items-center w-full gap-3 px-3 py-2 text-sm transition cursor-pointer group rounded-xl text-zinc-700 hover:bg-violet-50 hover:text-violet-700"
             >
@@ -243,6 +324,56 @@ export default function Composer({
               )}
             </div>
           </div>
+
+          {/* Sticker Picker Panel */}
+          <div
+            className={[
+              "absolute bottom-full left-0 mb-2 w-[320px] rounded-2xl border border-zinc-200 bg-white shadow-lg overflow-hidden",
+              "origin-bottom-left transition-all duration-200 ease-out",
+              stickerOpen
+                ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
+                : "opacity-0 translate-y-1 scale-95 pointer-events-none",
+            ].join(" ")}
+          >
+            <div className="flex items-center justify-between p-3 border-b border-zinc-200">
+              <div className="text-sm font-semibold text-zinc-800">
+                Stickers
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setStickerOpen?.(false)}
+                className="grid w-9 h-9 rounded-xl hover:bg-zinc-100 place-items-center"
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3 max-h-[340px] overflow-auto">
+              <div className="grid grid-cols-3 gap-2">
+                {STICKERS.map((url) => (
+                  <button
+                    key={url}
+                    type="button"
+                    onClick={() => {
+                      sendSticker?.(url); // ✅ gửi luôn
+                      setStickerOpen?.(false);
+                    }}
+                    className="relative overflow-hidden rounded-xl bg-zinc-50 hover:ring-2 hover:ring-violet-400"
+                    title="Send sticker"
+                  >
+                    <img
+                      src={url}
+                      alt="sticker"
+                      className="object-contain w-full h-24"
+                      loading="lazy"
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Text + pending preview */}
@@ -343,24 +474,104 @@ export default function Composer({
             </div>
           ) : null}
 
-          <textarea
-            value={text}
-            onChange={(e) => {
-              setText(e.target.value);
-              if (chat) startTyping();
-            }}
-            onBlur={() => stopTyping()}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+          <div className="relative flex items-center justify-center gap-2">
+            <textarea
+              ref={inputRef}
+              value={text}
+              onChange={(e) => {
+                setText(e.target.value);
+                if (chat) startTyping();
+              }}
+              onBlur={() => stopTyping()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              placeholder={chat ? "Write a message..." : "Select a chat first"}
+              rows={1}
+              disabled={!chat || sending}
+              className="flex-1 min-w-0 text-sm bg-transparent outline-none resize-none text-zinc-900 placeholder:text-zinc-400 disabled:opacity-60"
+            />
+
+            {/* Emoji icon (UI only) */}
+            {/* Emoji */}
+            <button
+              ref={emojiBtnRef}
+              type="button"
+              disabled={!chat || sending}
+              title="Emoji"
+              className={[
+                "grid w-9 h-9 rounded-xl place-items-center transition active:scale-95",
+                !chat || sending
+                  ? "text-zinc-400 cursor-not-allowed"
+                  : "text-violet-600 hover:bg-violet-50 cursor-pointer",
+              ].join(" ")}
+              onClick={(e) => {
                 e.preventDefault();
-                handleSend();
-              }
-            }}
-            placeholder={chat ? "Write a message..." : "Select a chat first"}
-            rows={1}
-            disabled={!chat || sending}
-            className="w-full text-sm bg-transparent outline-none resize-none text-zinc-900 placeholder:text-zinc-400 disabled:opacity-60"
-          />
+                e.stopPropagation();
+                if (!chat || sending) return;
+
+                // đóng menu khác cho gọn UI
+                setAttachOpen?.(false);
+                setGifOpen?.(false);
+
+                setEmojiOpen((v) => !v);
+              }}
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="9"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                />
+                <circle cx="9.2" cy="10.2" r="1.2" fill="currentColor" />
+                <circle cx="14.8" cy="10.2" r="1.2" fill="currentColor" />
+                <path
+                  d="M8.2 14.2C9.4 15.6 10.7 16.3 12 16.3C13.3 16.3 14.6 15.6 15.8 14.2"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+
+            {/* Emoji Picker Popover */}
+            {emojiOpen && (
+              <div
+                ref={emojiBoxRef}
+                className={[
+                  "absolute right-0 bottom-[calc(100%+10px)] z-[80]",
+                  "rounded-2xl overflow-hidden",
+                  "shadow-xl ring-1 ring-zinc-200 bg-white",
+                ].join(" ")}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <EmojiPicker
+                  theme="light"
+                  lazyLoadEmojis
+                  searchPlaceHolder="Search emoji…"
+                  width={360}
+                  height={420}
+                  onEmojiClick={(emojiData) => {
+                    insertAtCursor(emojiData.emoji);
+                    // thích chọn xong auto đóng thì mở dòng này:
+                    // setEmojiOpen(false);
+                  }}
+                />
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Send */}

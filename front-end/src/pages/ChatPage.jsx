@@ -330,6 +330,13 @@ export default function ChatPage() {
         const mime = String(a.mime || a.contentType || "").toLowerCase();
         const url = a.url;
 
+        const isSticker =
+          kind === "sticker" ||
+          /\/stickers\//i.test(url) || // phòng trường hợp kind thiếu
+          String(a.name || "").toLowerCase() === "sticker";
+
+        if (isSticker) continue;
+
         const gif = kind === "gif" || mime === "image/gif" || isGifUrl(url);
         const image = gif || kind === "image" || mime.startsWith("image/");
         const video = kind === "video" || mime.startsWith("video/");
@@ -577,6 +584,35 @@ export default function ChatPage() {
       isRecalled: true,
       recalledAt: new Date().toISOString(),
     });
+
+    // ✅ update sidebar preview luôn (nếu đang preview đúng tin này)
+    const oldPreview =
+      (backup?.text || "").trim() ||
+      (Array.isArray(backup?.attachments) && backup.attachments.length
+        ? "Sent an attachment"
+        : "");
+
+    setChats((prev) =>
+      bumpChat(prev, cid, (c) => {
+        const cur = String(c?.lastMessage || "");
+
+        // direct: "hello"
+        // group (có thể): "A: hello"
+        const isThisPreview =
+          cur === oldPreview || (oldPreview && cur.endsWith(`: ${oldPreview}`));
+
+        if (!isThisPreview && !(cur === "Sent an attachment" && !oldPreview))
+          return c;
+
+        // giữ prefix nếu là group dạng "A: "
+        if (oldPreview && cur.endsWith(`: ${oldPreview}`)) {
+          const prefix = cur.slice(0, cur.length - oldPreview.length);
+          return { ...c, lastMessage: `${prefix}Đã thu hồi tin nhắn` };
+        }
+
+        return { ...c, lastMessage: "Đã thu hồi tin nhắn" };
+      }),
+    );
 
     try {
       if (socket.connected) {

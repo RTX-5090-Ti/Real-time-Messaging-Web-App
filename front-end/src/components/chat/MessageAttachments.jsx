@@ -15,6 +15,7 @@ export function MessageAttachments({
     return (
       kind === "image" ||
       kind === "gif" ||
+      kind === "sticker" ||
       mime.startsWith("image/") ||
       /\.(png|jpe?g|webp|gif)(\?|$)/.test(url)
     );
@@ -47,7 +48,7 @@ export function MessageAttachments({
             src={msgImage}
             alt="attachment"
             className={[
-              "max-w-[260px] rounded-2xl ring-1 ring-zinc-200 cursor-zoom-in",
+              "max-w-[160px] rounded-2xl ring-1 ring-zinc-200 cursor-zoom-in",
               mine ? "ring-white/10" : "ring-zinc-200",
             ].join(" ")}
             loading="lazy"
@@ -81,6 +82,8 @@ export function MessageAttachments({
 
             if (isImageAtt(a)) {
               const src = a?.preview || url;
+              const kind2 = String(a?.kind || "").toLowerCase();
+              const isSticker = kind2 === "sticker";
 
               const isGif =
                 String(a?.kind || "").toLowerCase() === "gif" ||
@@ -88,6 +91,22 @@ export function MessageAttachments({
                 isGifUrl(url);
 
               if (!isGif) {
+                // ✅ Sticker: nhỏ gọn như Messenger, không lightbox
+                if (isSticker) {
+                  return (
+                    <img
+                      key={`${url}-${idx}`}
+                      src={src}
+                      alt={a?.name || "sticker"}
+                      className="w-auto h-auto max-w-[40vw] max-h-[40vw] sm:max-w-[160px] sm:max-h-[160px] object-contain select-none"
+                      loading="lazy"
+                      onLoad={() => onMediaLoad?.()}
+                      onError={() => onMediaLoad?.()}
+                    />
+                  );
+                }
+
+                // ✅ Ảnh thường: giữ nguyên lightbox
                 return (
                   <button
                     key={`${url}-${idx}`}

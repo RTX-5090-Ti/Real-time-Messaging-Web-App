@@ -407,10 +407,16 @@ export function useChatSocket({
       const mid = String(payload.messageId || "");
       if (!cid || !mid) return;
 
+      let updated = false;
+      let isLast = false;
+
       setMessagesByChatId((prev) => {
         const list = prev[cid] ?? [];
         const idx = list.findIndex((m) => String(m.id) === mid);
         if (idx === -1) return prev;
+
+        updated = true;
+        isLast = idx === list.length - 1;
 
         const next = [...list];
         next[idx] = {
@@ -425,6 +431,20 @@ export function useChatSocket({
         };
         return { ...prev, [cid]: next };
       });
+
+      // ✅ nếu tin bị recall là last message => update sidebar
+      if (updated && isLast) {
+        setChats((prev) =>
+          bumpChat(prev, cid, (c) => ({
+            ...c,
+            lastMessage: payload.text ?? "Đã thu hồi tin nhắn",
+          })),
+        );
+      } else {
+        // fallback: nếu chưa load messages của convo này -> reload list để chắc chắn
+        const fn = reloadConversationsRef.current;
+        if (typeof fn === "function") fn(String(meId)).catch(() => {});
+      }
     };
 
     const onMessagePinned = (payload = {}) => {
