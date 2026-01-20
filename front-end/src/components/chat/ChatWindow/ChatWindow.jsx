@@ -24,6 +24,7 @@ export default function ChatWindow({
   seenBy = [],
   onTypingStart,
   onTypingStop,
+  onBack,
   onChooseSticker,
   onRetryMessage,
   replyDraft,
@@ -204,7 +205,7 @@ export default function ChatWindow({
   };
 
   return (
-    <main className="flex flex-col flex-1 min-w-0 bg-zinc-50">
+    <main className="flex flex-col flex-1 min-w-0 bg-zinc-50 dark:bg-zinc-950">
       <ChatWindowHeader
         title={title}
         subtitle={subtitle}
@@ -221,17 +222,18 @@ export default function ChatWindow({
         matchIds={matchIds}
         matchPos={matchPos}
         setMatchPos={setMatchPos}
+        onBack={onBack}
       />
 
       {chat && pinnedMessages.length > 0 && (
-        <div className="px-4 py-2 bg-white border-b shrink-0 border-zinc-200">
+        <div className="px-4 py-2 bg-white border-b dark:bg-zinc-950 shrink-0 border-zinc-200 dark:border-zinc-800">
           <div className="flex items-center min-w-0 gap-2">
             <span className="text-zinc-500">📌</span>
 
             {/* click snippet -> jump */}
             <button
               type="button"
-              className="min-w-0 text-sm text-left truncate cursor-pointer text-zinc-800 hover:underline"
+              className="min-w-0 text-sm text-left truncate cursor-pointer text-zinc-800 dark:text-zinc-100 hover:underline"
               title="Nhảy tới tin đã ghim"
               onClick={() => jumpToMessage(pinnedMessages[0].id)}
             >
@@ -241,7 +243,7 @@ export default function ChatWindow({
             {pinnedMessages.length > 1 && (
               <button
                 type="button"
-                className="ml-auto text-sm font-medium cursor-pointer text-violet-700 hover:underline"
+                className="ml-auto text-sm font-medium cursor-pointer text-violet-700 dark:text-violet-300 hover:underline"
                 onClick={() => setPinnedOpen(true)}
                 title="Xem tất cả tin đã ghim"
               >
@@ -257,18 +259,18 @@ export default function ChatWindow({
               onMouseDown={() => setPinnedOpen(false)}
             >
               <div
-                className="w-full max-w-md overflow-hidden bg-white shadow-xl rounded-2xl ring-1 ring-black/5"
+                className="w-full max-w-md overflow-hidden bg-white shadow-xl dark:bg-zinc-950 rounded-2xl ring-1 ring-black/5 dark:ring-zinc-800"
                 onMouseDown={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
               >
-                <div className="flex items-center justify-between px-4 border-b h-14 border-zinc-200">
-                  <div className="font-semibold text-zinc-900">
+                <div className="flex items-center justify-between px-4 border-b h-14 border-zinc-200 dark:border-zinc-800">
+                  <div className="font-semibold text-zinc-900 dark:text-zinc-100">
                     Tin nhắn đã ghim
                   </div>
                   <button
                     type="button"
-                    className="grid cursor-pointer w-9 h-9 rounded-xl place-items-center hover:bg-zinc-100"
+                    className="grid cursor-pointer w-9 h-9 rounded-xl place-items-center hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-100"
                     onClick={() => setPinnedOpen(false)}
                     title="Đóng"
                   >
@@ -281,14 +283,14 @@ export default function ChatWindow({
                     <button
                       key={m.id}
                       type="button"
-                      className="w-full px-3 py-2 text-sm text-left cursor-pointer rounded-xl hover:bg-zinc-50"
+                      className="w-full px-3 py-2 text-sm text-left cursor-pointer rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-900 text-zinc-900 dark:text-zinc-100"
                       onClick={() => {
                         setPinnedOpen(false);
                         jumpToMessage(m.id);
                       }}
                       title="Nhảy tới tin nhắn"
                     >
-                      <div className="truncate text-zinc-900">
+                      <div className="truncate text-zinc-900 dark:text-zinc-100">
                         {previewText(m)}
                       </div>
                     </button>

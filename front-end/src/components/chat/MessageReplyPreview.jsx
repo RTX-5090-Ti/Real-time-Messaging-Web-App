@@ -8,14 +8,16 @@ export function MessageReplyPreview({ mine, replyTo, replyId, onJumpTo }) {
       onClick={() => onJumpTo?.(replyId)}
       className={[
         "mb-2 w-full text-left rounded-xl px-3 py-2 ring-1",
-        mine ? "bg-white/10 ring-white/20" : "bg-zinc-50 ring-zinc-200",
+        mine
+          ? "bg-white/10 ring-white/20"
+          : "bg-zinc-50 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-700",
       ].join(" ")}
       title="Jump to original message"
     >
       <div
         className={[
           "text-[11px] font-semibold",
-          mine ? "text-white/80" : "text-zinc-600",
+          mine ? "text-white/80" : "text-zinc-600 dark:text-zinc-300",
         ].join(" ")}
       >
         Reply to {replyTo?.sender?.name || "User"}
@@ -24,7 +26,7 @@ export function MessageReplyPreview({ mine, replyTo, replyId, onJumpTo }) {
       <div
         className={[
           "text-xs truncate",
-          mine ? "text-white/90" : "text-zinc-700",
+          mine ? "text-white/90" : "text-zinc-700 dark:text-zinc-200",
         ].join(" ")}
       >
         {String(replyTo.text || "").trim() || "Message"}

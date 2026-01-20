@@ -43,8 +43,8 @@ export function MessageBubble({
   const bubbleClass = [
     "rounded-2xl px-4 py-3 ring-1 break-words",
     mine
-      ? "bg-violet-600 text-white ring-violet-300"
-      : "bg-white text-zinc-900 ring-zinc-200",
+      ? "bg-violet-600 text-white ring-violet-300 dark:ring-violet-400/40"
+      : "bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 ring-zinc-200 dark:ring-zinc-700",
     isSearchMatch ? "ring-2 ring-yellow-500 shadow-sm" : "",
     isSearchHit ? "ring-2 ring-yellow-500 shadow-sm" : "",
   ].join(" ");
@@ -63,7 +63,8 @@ export function MessageBubble({
   ].join(" ");
 
   // IMPORTANT: bubble + actionbar phải fit trong 100% => trừ ~88px (2 nút + gap)
-  const bubbleWrapClass = "min-w-0 max-w-[calc(70%-88px)]";
+  const bubbleWrapClass =
+    "min-w-0 max-w-[calc(85%-88px)] sm:max-w-[calc(70%-88px)]";
 
   const actionBarClass = [
     "z-30 flex items-center gap-2 shrink-0",
@@ -79,7 +80,7 @@ export function MessageBubble({
   if (isSystem) {
     return (
       <div className="flex justify-center w-full py-2">
-        <div className="px-3 py-1 text-xs rounded-full bg-zinc-100 text-zinc-500">
+        <div className="px-3 py-1 text-xs rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-300">
           {msg.text}
         </div>
       </div>
@@ -127,7 +128,7 @@ export function MessageBubble({
             <div className={bubbleWrapClass}>
               {/* Group chat: show sender name (only for other people) */}
               {!mine && showSenderName && msg?.name ? (
-                <div className="pl-1 mb-1 text-xs font-semibold select-none text-zinc-500">
+                <div className="pl-1 mb-1 text-xs font-semibold select-none text-zinc-500 dark:text-zinc-400">
                   {msg.name}
                 </div>
               ) : null}
@@ -143,7 +144,9 @@ export function MessageBubble({
                     <span
                       className={[
                         "inline-flex items-center text-xs font-semibold select-none",
-                        mine ? "text-violet-200" : "text-zinc-500",
+                        mine
+                          ? "text-violet-200"
+                          : "text-zinc-500 dark:text-zinc-300",
                       ].join(" ")}
                       aria-label="Pinned"
                     >

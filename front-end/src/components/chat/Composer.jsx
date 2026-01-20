@@ -71,6 +71,21 @@ export default function Composer({
   ];
 
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [emojiTheme, setEmojiTheme] = useState(() =>
+    document.documentElement.classList.contains("dark") ? "dark" : "light",
+  );
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const update = () =>
+      setEmojiTheme(root.classList.contains("dark") ? "dark" : "light");
+
+    update();
+    const obs = new MutationObserver(update);
+    obs.observe(root, { attributes: true, attributeFilter: ["class"] });
+
+    return () => obs.disconnect();
+  }, []);
 
   const emojiBtnRef = useRef(null);
   const emojiBoxRef = useRef(null);
@@ -125,7 +140,7 @@ export default function Composer({
   }, [emojiOpen]);
 
   return (
-    <div className="p-4 bg-white border-t border-zinc-200">
+    <div className="p-3 bg-white border-t dark:bg-zinc-950 sm:p-4 border-zinc-200 dark:border-zinc-800">
       <div className="flex items-end gap-3">
         {/* Attach */}
         <div ref={attachWrapRef} className="relative">
@@ -180,7 +195,7 @@ export default function Composer({
           <div
             role="menu"
             className={[
-              "absolute bottom-full left-0 mb-2 w-56 rounded-2xl border border-zinc-200 bg-white shadow-lg p-2",
+              "absolute bottom-full left-0 mb-2 w-56 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg p-2",
               "origin-bottom-left transition-all duration-200 ease-out",
               attachOpen
                 ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
@@ -191,9 +206,9 @@ export default function Composer({
               type="button"
               role="menuitem"
               onClick={() => fileInputRef.current?.click()}
-              className="flex items-center w-full gap-3 px-3 py-2 text-sm transition cursor-pointer group rounded-xl text-zinc-700 hover:bg-violet-50 hover:text-violet-700"
+              className="flex items-center w-full gap-3 px-3 py-2 text-sm transition cursor-pointer group rounded-xl text-zinc-700 dark:text-zinc-100 hover:bg-violet-50 hover:text-violet-700 dark:hover:bg-violet-500/10 dark:hover:text-violet-200"
             >
-              <span className="grid transition h-9 w-9 place-items-center rounded-xl bg-zinc-50 group-hover:bg-white">
+              <span className="grid transition h-9 w-9 place-items-center rounded-xl bg-zinc-50 dark:bg-zinc-800 group-hover:bg-white dark:group-hover:bg-zinc-700">
                 📎
               </span>
               <span className="font-medium">Choose file</span>
@@ -207,9 +222,9 @@ export default function Composer({
                 setGifOpen(false);
                 setStickerOpen?.(true);
               }}
-              className="flex items-center w-full gap-3 px-3 py-2 text-sm transition cursor-pointer group rounded-xl text-zinc-700 hover:bg-violet-50 hover:text-violet-700"
+              className="flex items-center w-full gap-3 px-3 py-2 text-sm transition cursor-pointer group rounded-xl text-zinc-700 dark:text-zinc-100 hover:bg-violet-50 hover:text-violet-700 dark:hover:bg-violet-500/10 dark:hover:text-violet-200"
             >
-              <span className="grid transition h-9 w-9 place-items-center rounded-xl bg-zinc-50 group-hover:bg-white">
+              <span className="grid transition h-9 w-9 place-items-center rounded-xl bg-zinc-50 dark:bg-zinc-800 group-hover:bg-white dark:group-hover:bg-zinc-700">
                 🙂
               </span>
               <span className="font-medium">Choose sticker</span>
@@ -225,7 +240,7 @@ export default function Composer({
               }}
               className="flex items-center w-full gap-3 px-3 py-2 text-sm transition cursor-pointer group rounded-xl text-zinc-700 hover:bg-violet-50 hover:text-violet-700"
             >
-              <span className="grid transition h-9 w-9 place-items-center rounded-xl bg-zinc-50 group-hover:bg-white">
+              <span className="grid transition h-9 w-9 place-items-center rounded-xl bg-zinc-50 dark:bg-zinc-800 group-hover:bg-white dark:group-hover:bg-zinc-700">
                 GIF
               </span>
               <span className="font-medium">Choose GIF</span>
@@ -235,18 +250,18 @@ export default function Composer({
           {/* GIF Picker Panel */}
           <div
             className={[
-              "absolute bottom-full left-0 mb-2 w-[360px] rounded-2xl border border-zinc-200 bg-white shadow-lg overflow-hidden",
+              "absolute bottom-full left-0 mb-2 w-[92vw] w-[360px] rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg overflow-hidden",
               "origin-bottom-left transition-all duration-200 ease-out",
               gifOpen
                 ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
                 : "opacity-0 translate-y-1 scale-95 pointer-events-none",
             ].join(" ")}
           >
-            <div className="p-3 border-b border-zinc-200">
+            <div className="p-3 border-b border-zinc-200 dark:border-zinc-700">
               <div className="flex items-center gap-2">
                 <div className="flex-1">
                   {replyDraft ? (
-                    <div className="flex items-center gap-2 px-3 py-2 mb-2 border rounded-xl border-violet-100 bg-violet-50">
+                    <div className="flex items-center gap-2 px-3 py-2 mb-2 border rounded-xl border-violet-100 dark:border-violet-500/20 bg-violet-50 dark:bg-violet-500/10">
                       <div className="flex-1 min-w-0">
                         <div className="text-[11px] font-semibold text-violet-700">
                           Replying to {replyDraft.name}
@@ -270,13 +285,13 @@ export default function Composer({
                     value={gifQuery}
                     onChange={(e) => setGifQuery(e.target.value)}
                     placeholder="Search GIFs…"
-                    className="w-full px-3 py-2 text-sm border outline-none rounded-xl border-zinc-200 focus:border-violet-400"
+                    className="w-full px-3 py-2 text-sm bg-white border outline-none rounded-xl border-zinc-200 dark:border-zinc-700 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-violet-400"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={() => setGifOpen(false)}
-                  className="grid w-9 h-9 rounded-xl hover:bg-zinc-100 place-items-center"
+                  className="grid w-9 h-9 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 place-items-center text-zinc-700 dark:text-zinc-100"
                   title="Close"
                 >
                   ✕
@@ -301,7 +316,7 @@ export default function Composer({
                         addPendingGif(g);
                         setGifOpen(false);
                       }}
-                      className="relative overflow-hidden rounded-xl bg-zinc-100 hover:ring-2 hover:ring-violet-400"
+                      className="relative overflow-hidden rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:ring-2 hover:ring-violet-400"
                       title="Select GIF"
                     >
                       <img
@@ -328,15 +343,15 @@ export default function Composer({
           {/* Sticker Picker Panel */}
           <div
             className={[
-              "absolute bottom-full left-0 mb-2 w-[320px] rounded-2xl border border-zinc-200 bg-white shadow-lg overflow-hidden",
+              "absolute bottom-full left-0 mb-2 w-[92vw] w-[320px] rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg overflow-hidden",
               "origin-bottom-left transition-all duration-200 ease-out",
               stickerOpen
                 ? "opacity-100 translate-y-0 scale-100 pointer-events-auto"
                 : "opacity-0 translate-y-1 scale-95 pointer-events-none",
             ].join(" ")}
           >
-            <div className="flex items-center justify-between p-3 border-b border-zinc-200">
-              <div className="text-sm font-semibold text-zinc-800">
+            <div className="flex items-center justify-between p-3 border-b border-zinc-200 dark:border-zinc-700">
+              <div className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                 Stickers
               </div>
 
@@ -352,15 +367,15 @@ export default function Composer({
 
             <div className="p-3 max-h-[340px] overflow-auto">
               <div className="grid grid-cols-3 gap-2">
-                {STICKERS.map((url) => (
+                {STICKERS.map((url, idx) => (
                   <button
-                    key={url}
+                    key={`${url}-${idx}`}
                     type="button"
                     onClick={() => {
                       sendSticker?.(url); // ✅ gửi luôn
                       setStickerOpen?.(false);
                     }}
-                    className="relative overflow-hidden rounded-xl bg-zinc-50 hover:ring-2 hover:ring-violet-400"
+                    className="relative overflow-hidden rounded-xl bg-zinc-50 dark:bg-zinc-800 hover:ring-2 hover:ring-violet-400"
                     title="Send sticker"
                   >
                     <img
@@ -377,7 +392,7 @@ export default function Composer({
         </div>
 
         {/* Text + pending preview */}
-        <div className="flex-1 px-4 py-3 bg-white border rounded-2xl border-zinc-200">
+        <div className="flex-1 px-4 py-3 bg-white border dark:bg-zinc-950 rounded-2xl border-zinc-200 dark:border-zinc-700">
           {pending.length ? (
             <div className="flex gap-2 pt-3 pb-2 pr-1 pr-3 overflow-x-auto overflow-y-visible">
               {pending.map((p) => {
@@ -412,7 +427,7 @@ export default function Composer({
                         <img
                           src={thumbSrc}
                           alt={titleText}
-                          className="object-cover h-14 w-14 rounded-xl ring-1 ring-zinc-200"
+                          className="object-cover h-14 w-14 rounded-xl ring-1 ring-zinc-200 dark:ring-zinc-700"
                         />
                         {p.kind === "gif" ? (
                           <span className="absolute bottom-1 left-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/70 text-white">
@@ -421,13 +436,13 @@ export default function Composer({
                         ) : null}
                       </div>
                     ) : (
-                      <div className="h-14 max-w-[260px] rounded-xl bg-zinc-50 ring-1 ring-zinc-200 px-3 flex items-center gap-2">
+                      <div className="h-14 max-w-[260px] rounded-xl bg-zinc-50 dark:bg-zinc-900 ring-1 ring-zinc-200 dark:ring-zinc-700 px-3 flex items-center gap-2">
                         <div className="min-w-0">
-                          <div className="text-xs font-medium truncate text-zinc-800">
+                          <div className="text-xs font-medium truncate text-zinc-800 dark:text-zinc-100">
                             {p.file.name}
                           </div>
                           <div className="flex items-center gap-2 text-[11px]">
-                            <span className="text-zinc-500">
+                            <span className="text-zinc-500 dark:text-zinc-400">
                               {prettySize(p.file.size)}
                             </span>
                             {p.status === "uploading" ? (
@@ -450,15 +465,15 @@ export default function Composer({
           ) : null}
 
           {replyDraft ? (
-            <div className="flex items-center justify-between gap-2 px-3 py-2 mb-2 text-sm bg-white border rounded-xl border-zinc-200">
+            <div className="flex items-center justify-between gap-2 px-3 py-2 mb-2 text-sm bg-white border dark:bg-zinc-900 rounded-xl border-zinc-200 dark:border-zinc-700">
               <div className="min-w-0">
-                <div className="text-[12px] text-zinc-500">
+                <div className="text-[12px] text-zinc-500 dark:text-zinc-400">
                   Reply to{" "}
-                  <span className="font-medium text-zinc-700">
+                  <span className="font-medium text-zinc-700 dark:text-zinc-200">
                     {replyDraft.name}
                   </span>
                 </div>
-                <div className="truncate text-zinc-700">
+                <div className="truncate text-zinc-700 dark:text-zinc-200">
                   {replyDraft.preview}
                 </div>
               </div>
@@ -466,7 +481,7 @@ export default function Composer({
               <button
                 type="button"
                 onClick={() => onCancelReply?.()}
-                className="grid rounded-lg h-7 w-7 place-items-center hover:bg-zinc-100"
+                className="grid rounded-lg h-7 w-7 place-items-center hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-100"
                 title="Cancel reply"
               >
                 ✕
@@ -492,7 +507,7 @@ export default function Composer({
               placeholder={chat ? "Write a message..." : "Select a chat first"}
               rows={1}
               disabled={!chat || sending}
-              className="flex-1 min-w-0 text-sm bg-transparent outline-none resize-none text-zinc-900 placeholder:text-zinc-400 disabled:opacity-60"
+              className="flex-1 min-w-0 text-sm bg-transparent outline-none resize-none text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 disabled:opacity-60"
             />
 
             {/* Emoji icon (UI only) */}
@@ -506,7 +521,7 @@ export default function Composer({
                 "grid w-9 h-9 rounded-xl place-items-center transition active:scale-95",
                 !chat || sending
                   ? "text-zinc-400 cursor-not-allowed"
-                  : "text-violet-600 hover:bg-violet-50 cursor-pointer",
+                  : "text-violet-600 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-500/10 cursor-pointer",
               ].join(" ")}
               onClick={(e) => {
                 e.preventDefault();
@@ -553,12 +568,12 @@ export default function Composer({
                 className={[
                   "absolute right-0 bottom-[calc(100%+10px)] z-[80]",
                   "rounded-2xl overflow-hidden",
-                  "shadow-xl ring-1 ring-zinc-200 bg-white",
+                  "shadow-xl ring-1 ring-zinc-200 dark:ring-zinc-700 bg-white dark:bg-zinc-950",
                 ].join(" ")}
                 onMouseDown={(e) => e.stopPropagation()}
               >
                 <EmojiPicker
-                  theme="light"
+                  theme={emojiTheme}
                   lazyLoadEmojis
                   searchPlaceHolder="Search emoji…"
                   width={360}
@@ -582,7 +597,7 @@ export default function Composer({
           className={[
             "grid h-11 w-11 rounded-xl place-items-center transition",
             !canSend
-              ? "bg-zinc-200 text-zinc-500 cursor-not-allowed"
+              ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-300 cursor-not-allowed"
               : "bg-violet-600 text-white hover:bg-violet-700 cursor-pointer",
           ].join(" ")}
           title={sending ? "Sending..." : "Send"}

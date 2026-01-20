@@ -157,13 +157,15 @@ export function MessageAttachments({
                   "flex items-center gap-3 rounded-xl px-3 py-2 transition",
                   mine
                     ? "bg-white/10 hover:bg-white/15"
-                    : "bg-zinc-50 hover:bg-zinc-100",
+                    : "bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:text-zinc-100",
                 ].join(" ")}
               >
                 <span
                   className={[
                     "grid h-9 w-9 place-items-center rounded-xl",
-                    mine ? "bg-white/10" : "bg-white",
+                    mine
+                      ? "bg-white/10"
+                      : "bg-white dark:bg-zinc-950 ring-1 ring-zinc-200 dark:ring-zinc-800",
                   ].join(" ")}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -184,7 +186,9 @@ export function MessageAttachments({
                   <div
                     className={[
                       "text-[11px]",
-                      mine ? "text-white/70" : "text-zinc-500",
+                      mine
+                        ? "text-white/70"
+                        : "text-zinc-500 dark:text-zinc-400",
                     ].join(" ")}
                   >
                     {prettySize(a?.size)}

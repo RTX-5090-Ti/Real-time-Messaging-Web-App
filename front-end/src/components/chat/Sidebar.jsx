@@ -47,7 +47,9 @@ function ChatItem({
       onClick={() => onSelectChat(c.id)}
       className={[
         "group relative w-full text-left rounded-2xl p-3 flex gap-3 items-center transition cursor-pointer",
-        active ? "bg-violet-50 ring-1 ring-violet-200" : "hover:bg-zinc-50",
+        active
+          ? "bg-violet-50 ring-1 ring-violet-200 dark:bg-violet-500/15 dark:ring-violet-500/30"
+          : "hover:bg-zinc-50 dark:hover:bg-zinc-900/60",
       ].join(" ")}
       type="button"
     >
@@ -59,10 +61,24 @@ function ChatItem({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <p className="font-semibold truncate text-zinc-900">{c.name}</p>
-          <p className="text-xs text-zinc-400 shrink-0">{c.time}</p>
+          <p className="font-semibold truncate text-zinc-900 dark:text-zinc-100">
+            {c.name}
+          </p>
+
+          <p className="text-xs text-zinc-400 dark:text-zinc-400 shrink-0">
+            {c.time}
+          </p>
         </div>
-        <p className="text-sm truncate text-zinc-500">{c.lastMessage}</p>
+        <p
+          className={[
+            "text-sm truncate",
+            active
+              ? "text-zinc-600 dark:text-zinc-200"
+              : "text-zinc-500 dark:text-zinc-300",
+          ].join(" ")}
+        >
+          {c.lastMessage}
+        </p>
       </div>
 
       {c.unread > 0 ? (
@@ -76,12 +92,12 @@ function ChatItem({
       {/* Nút 3 chấm */}
       <div
         ref={btnRef}
-        className="absolute items-center justify-center hidden w-8 h-8 transition scale-90 -translate-y-1/2 rounded-full opacity-0 right-3 top-1/2 group-hover:flex group-hover:opacity-100 group-hover:scale-100 group-hover:bg-violet-100/60 hover:bg-violet-200 active:bg-violet-300"
+        className="absolute items-center justify-center hidden w-8 h-8 transition scale-90 -translate-y-1/2 rounded-full opacity-0 right-3 top-1/2 group-hover:flex group-hover:opacity-100 group-hover:scale-100 group-hover:bg-violet-100/60 dark:group-hover:bg-white/10 hover:bg-violet-200 dark:hover:bg-white/15 active:bg-violet-300"
         onClick={toggleMenu}
       >
         <svg
           viewBox="0 0 24 24"
-          className="w-5 h-5 text-violet-700"
+          className="w-5 h-5 text-violet-700 dark:text-violet-200"
           fill="currentColor"
           aria-hidden="true"
         >
@@ -97,7 +113,7 @@ function ChatItem({
         onClick={(e) => e.stopPropagation()}
         className={[
           "absolute right-3 top-1/2 translate-y-3 z-30",
-          "w-52 rounded-xl bg-white shadow-lg ring-1 ring-black/5 overflow-hidden",
+          "w-52 rounded-xl bg-white dark:bg-zinc-900 shadow-lg ring-1 ring-black/5 dark:ring-zinc-700 overflow-hidden",
           "origin-top-right transition-all duration-150",
           menuOpen
             ? "pointer-events-auto opacity-100 scale-100 translate-y-4"
@@ -160,13 +176,15 @@ function ChatItem({
             key={item.label}
             role="menuitem"
             tabIndex={0}
-            className="cursor-pointer w-full flex items-center gap-3 px-3 py-2.5 text-sm text-zinc-700 transition-colors hover:bg-violet-50 hover:text-violet-700"
+            className="cursor-pointer w-full flex items-center gap-3 px-3 py-2.5 text-sm text-zinc-700 dark:text-zinc-100 transition-colors hover:bg-violet-50 hover:text-violet-700 dark:hover:bg-violet-500/10 dark:hover:text-violet-200"
             onClick={item.onClick}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") item.onClick?.(e);
             }}
           >
-            <span className="transition-colors text-zinc-500">{item.icon}</span>
+            <span className="transition-colors text-zinc-500 dark:text-zinc-300">
+              {item.icon}
+            </span>
             <span className="text-left">{item.label}</span>
           </div>
         ))}
@@ -207,7 +225,9 @@ function NavButton({ active, label, badge, onClick, children }) {
           </span>
         ) : null}
       </div>
-      <div className="mt-1 text-[11px] font-medium">{label}</div>
+      <div className="mt-1 text-[11px] font-medium hidden sm:block">
+        {label}
+      </div>
     </button>
   );
 }
@@ -259,9 +279,64 @@ export default function Sidebar({
   onDeleteChat,
   onReport,
 }) {
+  // =============================
+  // THEME (Light / Dark / System)
+  // =============================
+  const THEME_KEY = "theme_mode"; // "light" | "dark" | "system"
+
+  const getSystemDark = () =>
+    window.matchMedia &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+  const applyTheme = (mode) => {
+    const root = document.documentElement;
+    const shouldDark =
+      mode === "dark" || (mode === "system" && getSystemDark());
+    root.classList.toggle("dark", shouldDark);
+  };
+
+  const [themeMode, setThemeMode] = useState(() => {
+    try {
+      return localStorage.getItem(THEME_KEY) || "system";
+    } catch {
+      return "system";
+    }
+  });
+
+  useEffect(() => {
+    applyTheme(themeMode);
+    try {
+      localStorage.setItem(THEME_KEY, themeMode);
+    } catch (error) {
+      console.log(error);
+    }
+  }, [themeMode]);
+
+  useEffect(() => {
+    if (themeMode !== "system") return;
+
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = () => applyTheme("system");
+
+    if (media.addEventListener) media.addEventListener("change", handler);
+    else media.addListener?.(handler);
+
+    return () => {
+      if (media.removeEventListener)
+        media.removeEventListener("change", handler);
+      else media.removeListener?.(handler);
+    };
+  }, [themeMode]);
+
+  const cycleTheme = () => {
+    setThemeMode((prev) =>
+      prev === "system" ? "light" : prev === "light" ? "dark" : "system",
+    );
+  };
+
   const totalUnread = useMemo(
     () => (chats || []).reduce((sum, c) => sum + (Number(c.unread) || 0), 0),
-    [chats]
+    [chats],
   );
 
   // --- SEARCH (Chats / Friends) ---
@@ -330,10 +405,11 @@ export default function Sidebar({
   }, [notificationsOpen, onCloseNotifications]);
 
   return (
-    <aside className="w-[400px] shrink-0 border-r border-zinc-200 bg-white flex">
+    <aside className="w-full h-full min-h-0 md:w-[400px] md:shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex">
       {/* LEFT NAV */}
-      <div className="w-[92px] bg-zinc-900 text-white flex flex-col items-center py-4 gap-3">
+      <div className="w-16 sm:w-[92px] bg-zinc-900 text-white flex flex-col items-center py-4 gap-3">
         {/* Nút nhấn avatar view Profile */}
+
         <button
           onClick={onProfile}
           className=" w-12 h-12 rounded-full overflow-hidden cursor-pointer transition outline-none focus:outline-none focus:ring-0  hover:bg-white/10 hover:shadow-[0_0_0_3px_rgba(255,255,255,0.25)]"
@@ -402,6 +478,66 @@ export default function Sidebar({
 
         <div className="w-full px-3 mt-auto space-y-2">
           {/* Nút nhấn "Profile" mở profile */}
+
+          {/* THEME (System / Light / Dark) - đặt trên avatar */}
+          <NavButton
+            active={themeMode === "dark"}
+            label={`Theme (${themeMode})`}
+            badge={0}
+            onClick={cycleTheme}
+          >
+            {themeMode === "dark" ? (
+              // moon
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M21 13.2A8.5 8.5 0 0 1 10.8 3a7 7 0 1 0 10.2 10.2Z"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            ) : themeMode === "light" ? (
+              // sun
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="4"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                />
+                <path
+                  d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            ) : (
+              // system
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M4 5h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                />
+                <path
+                  d="M8 21h8"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+                <path
+                  d="M12 17v4"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            )}
+          </NavButton>
+
           <NavButton
             active={false}
             label="Profile"
@@ -452,13 +588,15 @@ export default function Sidebar({
       </div>
 
       {/* RIGHT PANEL */}
-      <div className="flex flex-col flex-1 min-w-0">
-        <div className="flex items-center justify-between h-16 px-4 bg-white border-b border-zinc-200">
+      <div className="flex flex-col flex-1 min-w-0 min-h-0">
+        <div className="flex items-center justify-between h-16 px-4 bg-white border-b dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800">
           <div className="min-w-0">
-            <p className="font-semibold truncate text-zinc-900">
+            <p className="font-semibold truncate text-zinc-900 dark:text-zinc-100">
               {tab === "chats" ? "Chats" : "Friends"}
             </p>
-            <p className="text-xs truncate text-zinc-500">{me?.email}</p>
+            <p className="text-xs truncate text-zinc-500 dark:text-zinc-400">
+              {me?.email}
+            </p>
           </div>
 
           <div className="relative flex items-center gap-2">
@@ -547,14 +685,14 @@ export default function Sidebar({
         </div>
 
         {/* SEARCH BAR */}
-        <div className="px-4 py-2 border-b border-zinc-200">
+        <div className="px-4 py-2 border-b border-zinc-200 dark:border-zinc-800">
           {tab === "chats" ? (
             <div className="relative">
               <input
                 value={chatQuery}
                 onChange={(e) => setChatQuery(e.target.value)}
                 placeholder="Search chats..."
-                className="w-full h-10 px-3 pr-10 text-sm border outline-none rounded-xl border-zinc-200 focus:ring-2 focus:ring-violet-200"
+                className="w-full h-10 px-3 pr-10 text-sm bg-white border outline-none rounded-xl border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:ring-2 focus:ring-violet-200"
               />
               {chatQuery ? (
                 <button
@@ -589,7 +727,7 @@ export default function Sidebar({
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {tab === "chats" ? (
             <div className="p-2 space-y-1">
               {filteredChats.length ? (

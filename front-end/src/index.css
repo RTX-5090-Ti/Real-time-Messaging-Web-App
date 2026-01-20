@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -8,4 +9,9 @@
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+}
+html,
+body,
+#root {
+  height: 100%;
 }

@@ -231,6 +231,7 @@ export async function listMyConversations(req, res) {
       return {
         id: c._id,
         type: c.type,
+        createdAt: c.createdAt,
         lastMessageAt: c.lastMessageAt,
         name: c.name || null,
         avatarUrl: c.avatar?.url || null,

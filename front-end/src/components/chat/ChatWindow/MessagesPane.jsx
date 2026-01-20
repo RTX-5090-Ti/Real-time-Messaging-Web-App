@@ -43,10 +43,10 @@ export default function MessagesPane({
     <div
       ref={listRef}
       onScroll={handleScroll}
-      className="relative flex-1 p-6 space-y-5 overflow-x-hidden overflow-y-auto"
+      className="relative flex-1 p-6 space-y-5 overflow-x-hidden overflow-y-auto bg-zinc-50 dark:bg-zinc-900"
     >
       {chat && (hasMore || loadingMore) ? (
-        <div className="py-2 text-xs text-center text-zinc-500">
+        <div className="py-2 text-xs text-center text-zinc-500 dark:text-zinc-400">
           {loadingMore ? "Loading..." : "Scroll up to load more"}
         </div>
       ) : null}
@@ -113,7 +113,7 @@ export default function MessagesPane({
           />
         </>
       ) : (
-        <div className="grid h-full place-items-center text-zinc-500">
+        <div className="grid h-full place-items-center text-zinc-500 dark:text-zinc-400">
           Select a chat to start
         </div>
       )}

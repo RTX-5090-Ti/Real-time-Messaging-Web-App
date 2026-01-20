@@ -9,7 +9,7 @@ export const typingIndicatorCss = `
   width: 6px;
   height: 6px;
   border-radius: 9999px;
-  background: #71717a; /* zinc-500 */
+  background: currentColor; /* zinc-500 */
   display: inline-block;
   animation: dotPulse 1.1s infinite ease-in-out;
 }
@@ -38,12 +38,14 @@ export default function TypingIndicator({ avatar, name, show, text }) {
           className="object-cover w-8 h-8 rounded-full"
           title={name}
         />
-        <div className="px-4 py-3 bg-white border shadow-sm rounded-2xl border-zinc-200">
+        <div className="px-4 py-3 bg-white border shadow-sm dark:bg-zinc-900 rounded-2xl border-zinc-200 dark:border-zinc-700">
           {text ? (
-            <div className="mb-1 text-xs font-medium text-zinc-600">{text}</div>
+            <div className="mb-1 text-xs font-medium text-zinc-600 dark:text-zinc-200">
+              {text}
+            </div>
           ) : null}
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 text-zinc-500 dark:text-zinc-300">
             <span className="typing-dot" />
             <span className="typing-dot" />
             <span className="typing-dot" />

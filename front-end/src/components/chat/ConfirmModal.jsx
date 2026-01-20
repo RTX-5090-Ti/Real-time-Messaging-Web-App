@@ -37,16 +37,20 @@ export default function ConfirmModal({
       />
 
       <div className="absolute inset-0 grid p-4 place-items-center">
-        <div className="w-full max-w-[380px] rounded-2xl bg-white border border-zinc-200 shadow-xl p-5">
-          <h3 className="text-base font-bold text-zinc-900">{title}</h3>
+        <div className="w-full max-w-[380px] rounded-2xl bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 shadow-xl p-5">
+          <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
+            {title}
+          </h3>
           {description ? (
-            <p className="mt-2 text-sm text-zinc-600">{description}</p>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+              {description}
+            </p>
           ) : null}
 
           <div className="flex items-center justify-end gap-2 mt-5">
             <button
               type="button"
-              className="h-10 px-4 text-sm font-semibold border rounded-xl border-zinc-200 hover:bg-zinc-50 text-zinc-700 disabled:opacity-50"
+              className="h-10 px-4 text-sm font-semibold border rounded-xl border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-100 disabled:opacity-50"
               onClick={() => onCancel?.()}
               disabled={loading}
             >

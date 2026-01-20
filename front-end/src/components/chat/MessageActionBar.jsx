@@ -45,10 +45,14 @@ export function MessageActionBar({
     <button
       type="button"
       onClick={() => onReply?.()}
-      className="grid w-8 h-8 bg-white rounded-full cursor-pointer place-items-center ring-1 ring-zinc-200 hover:bg-zinc-50"
+      className="grid w-8 h-8 bg-white rounded-full cursor-pointer dark:bg-zinc-900 place-items-center ring-1 ring-zinc-200 dark:ring-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-100"
       title="Reply"
     >
-      <img className="w-[18px] h-[18px]" src="/undo_3917238.png" alt="" />
+      <img
+        className="w-[18px] h-[18px] dark:invert"
+        src="/undo_3917238.png"
+        alt=""
+      />
     </button>
   );
 
@@ -60,10 +64,14 @@ export function MessageActionBar({
           setOpenMore(false);
           setOpenReact((v) => !v);
         }}
-        className="grid w-8 h-8 bg-white rounded-full cursor-pointer place-items-center ring-1 ring-zinc-200 hover:bg-zinc-50"
+        className="grid w-8 h-8 bg-white rounded-full cursor-pointer dark:bg-zinc-900 place-items-center ring-1 ring-zinc-200 dark:ring-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-100"
         title="React"
       >
-        <img className="w-[18px] h-[18px]" src="/grin-alt_6275570.png" alt="" />
+        <img
+          className="w-[18px] h-[18px] dark:invert"
+          src="/grin-alt_6275570.png"
+          alt=""
+        />
       </button>
 
       {openReact ? (
@@ -71,7 +79,7 @@ export function MessageActionBar({
           className={[
             "absolute bottom-full mb-2 z-40",
             "left-1/2 -translate-x-1/2",
-            "flex items-center gap-1 rounded-full bg-white px-2 py-1 shadow-lg ring-1 ring-zinc-200",
+            "flex items-center gap-1 rounded-full bg-white dark:bg-zinc-900 px-2 py-1 shadow-lg ring-1 ring-zinc-200 dark:ring-zinc-700",
           ].join(" ")}
           onMouseLeave={() => setOpenReact(false)}
         >
@@ -83,7 +91,7 @@ export function MessageActionBar({
                 onReact?.(e);
                 setOpenReact(false);
               }}
-              className="grid text-xl rounded-full cursor-pointer w-9 h-9 place-items-center hover:bg-zinc-100"
+              className="grid text-xl rounded-full cursor-pointer w-9 h-9 place-items-center hover:bg-zinc-100 dark:hover:bg-zinc-800"
               title={e}
             >
               {e}
@@ -102,11 +110,11 @@ export function MessageActionBar({
           setOpenReact(false);
           setOpenMore((v) => !v);
         }}
-        className="grid w-8 h-8 bg-white rounded-full cursor-pointer place-items-center ring-1 ring-zinc-200 hover:bg-zinc-50"
+        className="grid w-8 h-8 bg-white rounded-full cursor-pointer dark:bg-zinc-900 place-items-center ring-1 ring-zinc-200 dark:ring-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-100"
         title="More Options"
       >
         <img
-          className="w-[16px] h-[16px]"
+          className="w-[16px] h-[16px] dark:invert"
           src="/circle-ellipsis-vertical_10741542.png"
           alt=""
         />
@@ -117,12 +125,12 @@ export function MessageActionBar({
           className={[
             "absolute bottom-full mb-2 z-50",
             mine ? "left-0" : "right-0",
-            "min-w-[160px] overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-zinc-200",
+            "min-w-[160px] overflow-hidden rounded-xl bg-white dark:bg-zinc-900 shadow-lg ring-1 ring-zinc-200 dark:ring-zinc-700",
           ].join(" ")}
         >
           <button
             type="button"
-            className="w-full px-3 py-2 text-sm text-left cursor-pointer hover:bg-zinc-50"
+            className="w-full px-3 py-2 text-sm text-left cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
             onClick={() => {
               setOpenMore(false);
               onPin?.();
@@ -135,7 +143,7 @@ export function MessageActionBar({
             <>
               <button
                 type="button"
-                className="w-full px-3 py-2 text-sm text-left cursor-pointer hover:bg-zinc-50"
+                className="w-full px-3 py-2 text-sm text-left cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
                 onClick={() => {
                   setOpenMore(false);
                   onEdit?.();
@@ -146,7 +154,7 @@ export function MessageActionBar({
 
               <button
                 type="button"
-                className="w-full px-3 py-2 text-sm text-left text-red-600 cursor-pointer hover:bg-zinc-50"
+                className="w-full px-3 py-2 text-sm text-left text-red-600 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800"
                 onClick={() => {
                   setOpenMore(false);
                   onRecall?.();

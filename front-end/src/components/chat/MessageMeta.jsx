@@ -4,7 +4,7 @@ export function MessageMeta({ mine, msg, onRetry }) {
     <div
       className={[
         "mt-2 text-[11px]",
-        mine ? "text-white/70" : "text-zinc-500",
+        mine ? "text-white/70" : "text-zinc-500 dark:text-zinc-400",
       ].join(" ")}
     >
       {msg.time}

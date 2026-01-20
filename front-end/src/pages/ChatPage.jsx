@@ -28,6 +28,8 @@ import CreateGroupModal from "../components/chat/CreateGroupModal.jsx";
 export default function ChatPage() {
   const navigate = useNavigate();
 
+  const [mobileView, setMobileView] = useState("list"); // "list" | "chat"
+
   // UI states
   const [tab, setTab] = useState("chats");
   const [infoOpen, setInfoOpen] = useState(false);
@@ -1097,123 +1099,156 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="w-full h-screen p-4 bg-gradient-to-r from-[#b06ab3] to-[#4568dc]">
-      <div className="h-full w-full rounded-[28px] overflow-hidden shadow-xl bg-white flex">
-        <Sidebar
-          me={me}
-          chats={chats}
-          friends={sortedFriends}
-          activeChatId={activeChatId}
-          onSelectChat={(id) => {
-            setActiveChatId(id);
-            setTab("chats");
-            // mở chat => unread = 0
-            setChats((prev) =>
-              prev.map((c) => (c.id === String(id) ? { ...c, unread: 0 } : c)),
-            );
-          }}
-          tab={tab}
-          setTab={setTab}
-          onLogout={onLogout}
-          onProfile={onProfile}
-          onFindFriend={() => setSearchOpen(true)}
-          onCreateGroup={onCreateGroup}
-          onMessageFriend={openChatWithFriend}
-          notificationsOpen={noti.notiOpen}
-          notificationsCount={noti.notiCount}
-          notifications={noti.notiItems}
-          onToggleNotifications={() => {
-            const next = !noti.notiOpen;
-            noti.setNotiOpen(next);
-            if (next) {
-              noti.markAllNotiRead();
-              noti.loadIncomingRequests().catch(() => {});
+    <div className="w-full h-[100svh] p-0 sm:p-4 bg-gradient-to-r from-[#b06ab3] to-[#4568dc]">
+      <div className="h-full w-full sm:rounded-[28px] overflow-hidden sm:shadow-xl bg-white flex min-h-0">
+        {/* Sidebar */}
+        <div
+          className={[
+            mobileView === "list" ? "block" : "hidden",
+            "md:block w-full md:w-auto h-full",
+          ].join(" ")}
+        >
+          <Sidebar
+            me={me}
+            chats={chats}
+            friends={sortedFriends}
+            activeChatId={activeChatId}
+            onSelectChat={(id) => {
+              setActiveChatId(id);
+              setTab("chats");
+              // mở chat => unread = 0
+              setChats((prev) =>
+                prev.map((c) =>
+                  c.id === String(id) ? { ...c, unread: 0 } : c,
+                ),
+              );
+              setMobileView("chat");
+              setInfoOpen(false);
+            }}
+            tab={tab}
+            setTab={setTab}
+            onLogout={onLogout}
+            onProfile={onProfile}
+            onFindFriend={() => setSearchOpen(true)}
+            onCreateGroup={onCreateGroup}
+            onMessageFriend={async (friendId) => {
+              await openChatWithFriend(friendId);
+              setMobileView("chat");
+              setInfoOpen(false);
+              setTab("chats");
+            }}
+            notificationsOpen={noti.notiOpen}
+            notificationsCount={noti.notiCount}
+            notifications={noti.notiItems}
+            onToggleNotifications={() => {
+              const next = !noti.notiOpen;
+              noti.setNotiOpen(next);
+              if (next) {
+                noti.markAllNotiRead();
+                noti.loadIncomingRequests().catch(() => {});
+              }
+            }}
+            onCloseNotifications={() => {
+              noti.setNotiOpen(false);
+            }}
+            onAcceptRequest={(requestId) => noti.acceptRequest(requestId)}
+            onRejectRequest={(requestId) => noti.rejectRequest(requestId)}
+            onClearAllNotifications={() => noti.clearAll()}
+            onDeleteChat={openDeleteModal}
+            onViewProfile={(chat) => {
+              const otherId =
+                chat?.otherUserId ||
+                chat?._raw?.members?.find?.(
+                  (m) => String(m.id) !== String(me?.id),
+                )?.id;
+
+              const seed = chat?._raw?.members?.find?.(
+                (m) => String(m.id) === String(otherId),
+              );
+
+              openOtherProfile(otherId, seed);
+            }}
+            onReport={(chat) => console.log("Report chat", chat)}
+          />
+        </div>
+
+        {/* ChatWindow */}
+        <div
+          className={[
+            mobileView === "chat" ? "flex" : "hidden",
+            "flex-1 min-w-0 h-full min-h-0",
+            "md:flex",
+          ].join(" ")}
+        >
+          <ChatWindow
+            chat={activeChat}
+            messages={messages}
+            onSend={onSendText}
+            onSendMessage={onSendMessage}
+            onProfile={onProfile}
+            otherOnline={activeOtherOnline}
+            typingText={typingText}
+            seenBy={seenBy}
+            onTypingStart={(conversationId) => {
+              const cid = conversationId
+                ? String(conversationId)
+                : activeChatId
+                  ? String(activeChatId)
+                  : null;
+              if (!cid || !socket.connected) return;
+              socket.emit("typing:start", {
+                conversationId: cid,
+                userId: String(me.id),
+                name: me.name || "User",
+              });
+            }}
+            onTypingStop={(conversationId) => {
+              const cid = conversationId
+                ? String(conversationId)
+                : activeChatId
+                  ? String(activeChatId)
+                  : null;
+              if (!cid || !socket.connected) return;
+              socket.emit("typing:stop", {
+                conversationId: cid,
+                userId: String(me.id),
+                name: me.name || "User",
+              });
+            }}
+            isInfoOpen={infoOpen}
+            onToggleInfo={() => setInfoOpen((v) => !v)}
+            onBack={() => {
+              setMobileView("list");
+              setInfoOpen(false);
+              setIsSearchOpen(false);
+            }}
+            onChooseSticker={() =>
+              alert("Sticker picker: not implemented yet.")
             }
-          }}
-          onCloseNotifications={() => {
-            noti.setNotiOpen(false);
-          }}
-          onAcceptRequest={(requestId) => noti.acceptRequest(requestId)}
-          onRejectRequest={(requestId) => noti.rejectRequest(requestId)}
-          onClearAllNotifications={() => noti.clearAll()}
-          onDeleteChat={openDeleteModal}
-          onViewProfile={(chat) => {
-            const otherId =
-              chat?.otherUserId ||
-              chat?._raw?.members?.find?.(
-                (m) => String(m.id) !== String(me?.id),
-              )?.id;
-
-            const seed = chat?._raw?.members?.find?.(
-              (m) => String(m.id) === String(otherId),
-            );
-
-            openOtherProfile(otherId, seed);
-          }}
-          onReport={(chat) => console.log("Report chat", chat)}
-        />
-
-        <ChatWindow
-          chat={activeChat}
-          messages={messages}
-          onSend={onSendText}
-          onSendMessage={onSendMessage}
-          onProfile={onProfile}
-          otherOnline={activeOtherOnline}
-          typingText={typingText}
-          seenBy={seenBy}
-          onTypingStart={(conversationId) => {
-            const cid = conversationId
-              ? String(conversationId)
-              : activeChatId
-                ? String(activeChatId)
-                : null;
-            if (!cid || !socket.connected) return;
-            socket.emit("typing:start", {
-              conversationId: cid,
-              userId: String(me.id),
-              name: me.name || "User",
-            });
-          }}
-          onTypingStop={(conversationId) => {
-            const cid = conversationId
-              ? String(conversationId)
-              : activeChatId
-                ? String(activeChatId)
-                : null;
-            if (!cid || !socket.connected) return;
-            socket.emit("typing:stop", {
-              conversationId: cid,
-              userId: String(me.id),
-              name: me.name || "User",
-            });
-          }}
-          isInfoOpen={infoOpen}
-          onToggleInfo={() => setInfoOpen((v) => !v)}
-          onChooseSticker={() => alert("Sticker picker: not implemented yet.")}
-          onRetryMessage={(msg) => {
-            const p = msg?.__retryPayload;
-            if (!p) return;
-            sendWithRetry({
-              ...p,
-              tmpId: msg.id,
-              clientId: msg.clientId,
-              replyTo: p.replyTo ?? null,
-            });
-          }}
-          hasMore={hasMore}
-          loadingMore={loadingMore}
-          onLoadMore={loadMore}
-          isSearchOpen={isSearchOpen}
-          onToggleSearch={() => setIsSearchOpen((v) => !v)}
-          replyDraft={replyDraft}
-          onReplySelect={onReplySelect}
-          onClearReply={() => setReplyDraft(null)}
-          onReactMessage={onReactMessage}
-          onPinMessage={onPinMessage}
-          onEditMessage={onEditMessage}
-          onRecallMessage={onRecallMessage}
-        />
+            onRetryMessage={(msg) => {
+              const p = msg?.__retryPayload;
+              if (!p) return;
+              sendWithRetry({
+                ...p,
+                tmpId: msg.id,
+                clientId: msg.clientId,
+                replyTo: p.replyTo ?? null,
+              });
+            }}
+            hasMore={hasMore}
+            loadingMore={loadingMore}
+            onLoadMore={loadMore}
+            isSearchOpen={isSearchOpen}
+            onToggleSearch={() => setIsSearchOpen((v) => !v)}
+            replyDraft={replyDraft}
+            onReplySelect={onReplySelect}
+            onClearReply={() => setReplyDraft(null)}
+            onReactMessage={onReactMessage}
+            onPinMessage={onPinMessage}
+            onEditMessage={onEditMessage}
+            onRecallMessage={onRecallMessage}
+          />
+        </div>
 
         <GroupInfo
           chat={activeChat}

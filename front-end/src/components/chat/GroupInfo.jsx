@@ -6,22 +6,26 @@ const isGifUrl = (url) => /\.(gif)(\?|$)/i.test(String(url || ""));
 
 function Section({ title, right, open, onToggle, children }) {
   return (
-    <div className="relative overflow-visible border rounded-2xl border-zinc-200">
+    <div className="relative overflow-visible bg-white border rounded-2xl border-zinc-200 dark:border-zinc-800 dark:bg-zinc-950">
       <button
         type="button"
         onClick={onToggle}
-        className="flex items-center justify-between w-full px-4 py-3 cursor-pointer hover:bg-zinc-50"
+        className="flex items-center justify-between w-full px-4 py-3 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900"
       >
         <div className="flex items-center min-w-0 gap-2">
-          <p className="font-semibold truncate text-zinc-900">{title}</p>
+          <p className="font-semibold truncate text-zinc-900 dark:text-zinc-100">
+            {title}
+          </p>
           {right != null ? (
-            <span className="text-sm text-zinc-500 shrink-0">{right}</span>
+            <span className="text-sm text-zinc-500 dark:text-zinc-400 shrink-0">
+              {right}
+            </span>
           ) : null}
         </div>
 
         <span
           className={[
-            "transition-transform text-zinc-500",
+            "transition-transform text-zinc-500 dark:text-zinc-400",
             open ? "rotate-180" : "rotate-0",
           ].join(" ")}
           aria-hidden="true"
@@ -95,7 +99,7 @@ function MediaGrid({ items, onOpenImage }) {
 function FileList({ items }) {
   if (!items?.length) {
     return (
-      <div className="px-3 py-3 text-sm border rounded-2xl border-zinc-200 bg-zinc-50 text-zinc-500">
+      <div className="px-3 py-3 text-sm border rounded-2xl border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-300">
         No files have been shared in this conversation yet.
       </div>
     );
@@ -103,6 +107,9 @@ function FileList({ items }) {
 
   return (
     <div className="pt-3 space-y-2">
+      <div className="px-3 py-3 text-sm border rounded-2xl border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-300">
+        No files have been shared in this conversation yet.
+      </div>
       {items.map((it) => (
         <button
           key={it.key}
@@ -304,16 +311,18 @@ export default function GroupInfo({
 
         <aside
           className={[
-            "absolute right-0 top-0 h-full w-[330px] bg-white border-l border-zinc-200 flex flex-col",
+            "absolute right-0 top-0 h-full w-[92vw] max-w-[330px] bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800 flex flex-col",
             "transition-transform duration-200 ease-out",
             open ? "translate-x-0" : "translate-x-full",
           ].join(" ")}
         >
-          <div className="flex items-center justify-between h-16 px-5 border-b border-zinc-200">
-            <p className="font-semibold text-zinc-900">Conversation Info</p>
+          <div className="flex items-center justify-between h-16 px-5 border-b border-zinc-200 dark:border-zinc-800">
+            <p className="font-semibold text-zinc-900 dark:text-zinc-100">
+              Conversation Info
+            </p>
             <button
               onClick={onClose}
-              className="cursor-pointer h-9 w-9 rounded-xl hover:bg-zinc-100 text-zinc-700"
+              className="cursor-pointer h-9 w-9 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-100"
               title="Close"
               type="button"
             >
@@ -338,7 +347,7 @@ export default function GroupInfo({
                       className="object-cover w-full h-full"
                     />
                   ) : (
-                    <div className="grid w-full h-full place-items-center bg-zinc-100 text-zinc-600">
+                    <div className="grid w-full h-full place-items-center bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-200">
                       🙂
                     </div>
                   )}
@@ -350,7 +359,7 @@ export default function GroupInfo({
                     type="button"
                     onClick={triggerPickAvatar}
                     disabled={busyAvatar}
-                    className="absolute grid bg-white border rounded-full cursor-pointer bottom-1 right-1 w-7 h-7 place-items-center border-zinc-200 text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                    className="absolute grid bg-white border rounded-full cursor-pointer dark:bg-zinc-900 bottom-1 right-1 w-7 h-7 place-items-center border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-60"
                     title="Change group avatar"
                   >
                     📷
@@ -369,7 +378,7 @@ export default function GroupInfo({
                         if (e.key === "Enter") submitEditName();
                         if (e.key === "Escape") cancelEditName();
                       }}
-                      className="h-9 w-[220px] px-3 text-sm border rounded-xl border-zinc-200 outline-none focus:ring-2 focus:ring-violet-200"
+                      className="h-9 w-[220px] px-3 text-sm border rounded-xl border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-violet-200"
                       placeholder="Group name..."
                       autoFocus
                       disabled={busyName}
@@ -379,7 +388,7 @@ export default function GroupInfo({
                       type="button"
                       onClick={submitEditName}
                       disabled={busyName}
-                      className="grid border cursor-pointer w-9 h-9 rounded-xl place-items-center border-zinc-200 hover:bg-zinc-50 disabled:opacity-60"
+                      className="grid border cursor-pointer w-9 h-9 rounded-xl place-items-center border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-100 disabled:opacity-60"
                       title="Save"
                     >
                       ✓
@@ -389,7 +398,7 @@ export default function GroupInfo({
                       type="button"
                       onClick={cancelEditName}
                       disabled={busyName}
-                      className="grid border cursor-pointer w-9 h-9 rounded-xl place-items-center border-zinc-200 hover:bg-zinc-50 disabled:opacity-60"
+                      className="grid border cursor-pointer w-9 h-9 rounded-xl place-items-center border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-100 disabled:opacity-60"
                       title="Cancel"
                     >
                       ✕
@@ -397,7 +406,7 @@ export default function GroupInfo({
                   </div>
                 ) : (
                   <div className="flex items-center justify-center gap-2">
-                    <p className="text-lg font-bold text-center text-zinc-900">
+                    <p className="text-lg font-bold text-center text-zinc-900 dark:text-zinc-100">
                       {name}
                     </p>
 
@@ -414,7 +423,7 @@ export default function GroupInfo({
                   </div>
                 )
               ) : (
-                <p className="text-lg font-bold text-center text-zinc-900">
+                <p className="text-lg font-bold text-center text-zinc-900 dark:text-zinc-100">
                   {name}
                 </p>
               )}
@@ -448,7 +457,7 @@ export default function GroupInfo({
                 <button
                   type="button"
                   onClick={onAddMember}
-                  className="w-full h-10 mt-3 text-sm font-semibold border cursor-pointer rounded-xl border-violet-200 hover:bg-violet-50 text-violet-700"
+                  className="w-full h-10 mt-3 text-sm font-semibold border cursor-pointer rounded-xl border-violet-200 dark:border-violet-500/30 hover:bg-violet-50 dark:hover:bg-violet-500/10 text-violet-700 dark:text-violet-200"
                 >
                   + Add member
                 </button>
@@ -474,7 +483,7 @@ export default function GroupInfo({
 
               <button
                 type="button"
-                className="w-full h-10 mt-3 text-sm font-semibold border cursor-pointer rounded-xl border-zinc-200 hover:bg-zinc-50 text-zinc-700 disabled:opacity-50 disabled:hover:bg-white"
+                className="w-full h-10 mt-3 text-sm font-semibold border cursor-pointer rounded-xl border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-100 disabled:opacity-50 disabled:hover:bg-white disabled:dark:hover:bg-zinc-900"
                 onClick={() => setShowAllMedia((v) => !v)}
                 disabled={!showAllMedia && mediaAll.length <= mediaItems.length}
               >
@@ -507,9 +516,11 @@ export default function GroupInfo({
       {/* DESKTOP (lg) */}
       <aside
         className={[
-          "hidden lg:flex shrink-0 bg-white overflow-hidden",
+          "hidden lg:flex shrink-0 bg-white dark:bg-zinc-950 overflow-hidden",
           "transition-[width] duration-300 ease-in-out",
-          open ? "w-[330px] border-l border-zinc-200" : "w-0 border-l-0",
+          open
+            ? "w-[330px] border-l border-zinc-200 dark:border-zinc-800"
+            : "w-0 border-l-0",
         ].join(" ")}
       >
         <div
@@ -521,11 +532,13 @@ export default function GroupInfo({
               : "opacity-0 translate-x-2 pointer-events-none",
           ].join(" ")}
         >
-          <div className="flex items-center justify-between h-16 px-5 border-b border-zinc-200">
-            <p className="font-semibold text-zinc-900">Conversation Info</p>
+          <div className="flex items-center justify-between h-16 px-5 border-b border-zinc-200 dark:border-zinc-800">
+            <p className="font-semibold text-zinc-900 dark:text-zinc-100">
+              Conversation Info
+            </p>
             <button
               onClick={onClose}
-              className="cursor-pointer h-9 w-9 rounded-xl hover:bg-zinc-100 text-zinc-700"
+              className="cursor-pointer h-9 w-9 rounded-xl hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-100"
               title="Close"
               type="button"
             >
@@ -550,7 +563,7 @@ export default function GroupInfo({
                       className="object-cover w-full h-full"
                     />
                   ) : (
-                    <div className="grid w-full h-full place-items-center bg-zinc-100 text-zinc-600">
+                    <div className="grid w-full h-full place-items-center bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-200">
                       🙂
                     </div>
                   )}
@@ -562,7 +575,7 @@ export default function GroupInfo({
                     type="button"
                     onClick={triggerPickAvatar}
                     disabled={busyAvatar}
-                    className="absolute grid bg-white border rounded-full cursor-pointer bottom-1 right-1 w-7 h-7 place-items-center border-zinc-200 text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
+                    className="absolute grid bg-white border rounded-full cursor-pointer dark:bg-zinc-900 bottom-1 right-1 w-7 h-7 place-items-center border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-60"
                     title="Change group avatar"
                   >
                     📷
@@ -581,7 +594,7 @@ export default function GroupInfo({
                         if (e.key === "Enter") submitEditName();
                         if (e.key === "Escape") cancelEditName();
                       }}
-                      className="h-9 w-[220px] px-3 text-sm border rounded-xl border-zinc-200 outline-none focus:ring-2 focus:ring-violet-200"
+                      className="h-9 w-[220px] px-3 text-sm border rounded-xl border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 outline-none focus:ring-2 focus:ring-violet-200"
                       placeholder="Group name..."
                       autoFocus
                       disabled={busyName}
@@ -591,7 +604,7 @@ export default function GroupInfo({
                       type="button"
                       onClick={submitEditName}
                       disabled={busyName}
-                      className="grid border cursor-pointer w-9 h-9 rounded-xl place-items-center border-zinc-200 hover:bg-zinc-50 disabled:opacity-60"
+                      className="grid border cursor-pointer w-9 h-9 rounded-xl place-items-center border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-100 disabled:opacity-60"
                       title="Save"
                     >
                       ✓
@@ -601,7 +614,7 @@ export default function GroupInfo({
                       type="button"
                       onClick={cancelEditName}
                       disabled={busyName}
-                      className="grid border cursor-pointer w-9 h-9 rounded-xl place-items-center border-zinc-200 hover:bg-zinc-50 disabled:opacity-60"
+                      className="grid border cursor-pointer w-9 h-9 rounded-xl place-items-center border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-100 disabled:opacity-60"
                       title="Cancel"
                     >
                       ✕
@@ -609,7 +622,7 @@ export default function GroupInfo({
                   </div>
                 ) : (
                   <div className="flex items-center justify-center gap-2">
-                    <p className="text-lg font-bold text-center text-zinc-900">
+                    <p className="text-lg font-bold text-center text-zinc-900 dark:text-zinc-100">
                       {name}
                     </p>
 
@@ -626,7 +639,7 @@ export default function GroupInfo({
                   </div>
                 )
               ) : (
-                <p className="text-lg font-bold text-center text-zinc-900">
+                <p className="text-lg font-bold text-center text-zinc-900 dark:text-zinc-100">
                   {name}
                 </p>
               )}
@@ -659,7 +672,7 @@ export default function GroupInfo({
                 <button
                   type="button"
                   onClick={onAddMember}
-                  className="w-full h-10 mt-3 text-sm font-semibold border cursor-pointer rounded-xl border-violet-200 hover:bg-violet-50 text-violet-700"
+                  className="w-full h-10 mt-3 text-sm font-semibold border cursor-pointer rounded-xl border-violet-200 dark:border-violet-500/30 hover:bg-violet-50 dark:hover:bg-violet-500/10 text-violet-700 dark:text-violet-200"
                 >
                   + Add member
                 </button>
@@ -685,7 +698,7 @@ export default function GroupInfo({
 
               <button
                 type="button"
-                className="w-full h-10 mt-3 text-sm font-semibold border cursor-pointer rounded-xl border-zinc-200 hover:bg-zinc-50 text-zinc-700 disabled:opacity-50 disabled:hover:bg-white"
+                className="w-full h-10 mt-3 text-sm font-semibold border cursor-pointer rounded-xl border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-900 text-zinc-700 dark:text-zinc-100 disabled:opacity-50 disabled:hover:bg-white disabled:dark:hover:bg-zinc-900"
                 onClick={() => setShowAllMedia((v) => !v)}
                 disabled={!showAllMedia && mediaAll.length <= mediaItems.length}
               >
@@ -832,7 +845,7 @@ function MemberList({
           <div
             key={mid || m.email || m.name}
             className={[
-              "relative flex items-center w-full gap-3 p-3 border rounded-2xl border-zinc-200 bg-white hover:bg-zinc-50",
+              "relative flex items-center w-full gap-3 p-3 border rounded-2xl border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:bg-zinc-50 dark:hover:bg-zinc-900",
               openMenuId === mid ? "z-[200]" : "z-0",
             ].join(" ")}
           >
@@ -858,7 +871,7 @@ function MemberList({
               <div className="flex-1 min-w-0">
                 <div className="grid items-center gap-2 min-w-0 w-full grid-cols-[minmax(0,1fr)_auto]">
                   {/* Name */}
-                  <p className="min-w-0 font-semibold truncate text-zinc-900">
+                  <p className="min-w-0 font-semibold truncate text-zinc-900 dark:text-zinc-100">
                     {m?.name || "Member"}
                   </p>
 
@@ -884,7 +897,7 @@ function MemberList({
                   </div>
                 </div>
 
-                <p className="text-xs truncate text-zinc-500">
+                <p className="text-xs truncate text-zinc-500 dark:text-zinc-400">
                   {m.email || m.role || "Member"}
                 </p>
               </div>
@@ -893,7 +906,7 @@ function MemberList({
             {/* ⋯ actions */}
             <button
               type="button"
-              className="grid cursor-pointer w-9 h-9 rounded-xl place-items-center hover:bg-zinc-100 text-zinc-700"
+              className="grid cursor-pointer w-9 h-9 rounded-xl place-items-center hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-100"
               title="More"
               onClick={(e) => {
                 e.stopPropagation();
@@ -905,10 +918,10 @@ function MemberList({
 
             {/* Dropdown menu */}
             {openMenuId === mid ? (
-              <div className="absolute right-3 top-[56px] z-[170] w-48 p-1 bg-white border shadow-lg rounded-xl border-zinc-200">
+              <div className="absolute right-3 top-[56px] z-[170] w-48 p-1 bg-white dark:bg-zinc-900 border shadow-lg rounded-xl border-zinc-200 dark:border-zinc-700">
                 <button
                   type="button"
-                  className="w-full px-3 py-2 text-sm text-left rounded-lg cursor-pointer hover:bg-zinc-50"
+                  className="w-full px-3 py-2 text-sm text-left rounded-lg cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
                   onClick={() => {
                     setOpenMenuId(null);
                     onOpenProfile?.(mid, m);
@@ -924,7 +937,7 @@ function MemberList({
                   isAdmin ? (
                     <button
                       type="button"
-                      className="w-full px-3 py-2 text-sm text-left rounded-lg cursor-pointer hover:bg-zinc-50"
+                      className="w-full px-3 py-2 text-sm text-left rounded-lg cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
                       onClick={async () => {
                         setOpenMenuId(null);
                         await onRemoveAdmin?.(mid, m);
@@ -935,7 +948,7 @@ function MemberList({
                   ) : (
                     <button
                       type="button"
-                      className="w-full px-3 py-2 text-sm text-left rounded-lg cursor-pointer hover:bg-zinc-50"
+                      className="w-full px-3 py-2 text-sm text-left rounded-lg cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
                       onClick={async () => {
                         setOpenMenuId(null);
                         await onMakeAdmin?.(mid, m);
@@ -950,7 +963,7 @@ function MemberList({
                 {showKick ? (
                   <button
                     type="button"
-                    className="w-full px-3 py-2 text-sm text-left text-red-600 rounded-lg cursor-pointer hover:bg-red-50"
+                    className="w-full px-3 py-2 text-sm text-left text-red-600 rounded-lg cursor-pointer hover:bg-red-50 dark:hover:bg-red-500/10"
                     onClick={() => {
                       setOpenMenuId(null);
                       onRequestKick?.(m);

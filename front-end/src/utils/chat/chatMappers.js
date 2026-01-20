@@ -8,7 +8,11 @@ export function mapConversationsToChats({
 }) {
   const getTs = (c) => {
     const x =
-      c?.lastMessage?.createdAt ?? c?.lastMessageAt ?? c?.createdAt ?? 0;
+      c?.lastMessage?.createdAt ??
+      c?.lastMessageAt ??
+      c?.updatedAt ??
+      c?.createdAt ??
+      0;
     const t = new Date(x).getTime();
     return Number.isFinite(t) ? t : 0;
   };
@@ -44,7 +48,7 @@ export function mapConversationsToChats({
         .join(", ") ||
       "Group chat";
 
-    const name = isGroup ? groupName : other?.name ?? "Conversation";
+    const name = isGroup ? groupName : (other?.name ?? "Conversation");
 
     const avatar = isGroup
       ? c?.avatarUrl || avatarFromName(name)
