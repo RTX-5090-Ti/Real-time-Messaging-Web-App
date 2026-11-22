@@ -47,7 +47,7 @@ const conversationSchema = new mongoose.Schema(
 // direct unique key
 conversationSchema.index(
   { type: 1, directKey: 1 },
-  { unique: true, sparse: true },
+  { unique: true, partialFilterExpression: { type: "direct", directKey: { $type: "string" } }, name: "direct_conversation_unique" },
 );
 
 // speed up query by members

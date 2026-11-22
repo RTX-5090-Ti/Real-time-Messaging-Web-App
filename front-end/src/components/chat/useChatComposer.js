@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChatAPI } from "../../api/chat.api.js";
 
 const isImageFile = (file) =>
@@ -24,36 +24,30 @@ export function useChatComposer({
 
   const [text, setText] = useState("");
 
-  // typing debounce
   const typingRef = useRef(false);
   const typingTimerRef = useRef(null);
   const prevChatIdRef = useRef(null);
-
-  // ✅ prevent "stuck typing" when switching chats
-  useEffect(() => {
-    const nextCid = chat?.id ? String(chat.id) : null;
-    const prevCid = prevChatIdRef.current;
-
-    // switching from prev -> next: force stop typing for prev
-    if (prevCid && prevCid !== nextCid) {
-      if (typingTimerRef.current) {
-        clearTimeout(typingTimerRef.current);
-        typingTimerRef.current = null;
-      }
-      if (typingRef.current) typingRef.current = false;
-      onTypingStop?.(String(prevCid));
-    }
-
-    prevChatIdRef.current = nextCid;
-  }, [chat?.id]);
-
-  // ✅ on unmount: stop typing for current chat
-  useEffect(() => {
-    return () => {
-      const cur = prevChatIdRef.current;
-      if (cur) onTypingStop?.(String(cur));
-    };
+  const lastTypingStartRef = useRef(0);
+  const typingCallbacks = useRef({ onTypingStart, onTypingStop });
+  useEffect(() => { typingCallbacks.current = { onTypingStart, onTypingStop }; }, [onTypingStart, onTypingStop]);
+  const stopTyping = useCallback(() => {
+    clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = null;
+    if (typingRef.current && prevChatIdRef.current) typingCallbacks.current.onTypingStop?.(prevChatIdRef.current);
+    typingRef.current = false;
+    lastTypingStartRef.current = 0;
   }, []);
+  useEffect(() => {
+    prevChatIdRef.current = chat?.id ? String(chat.id) : null;
+    const onVisibility = () => { if (document.visibilityState !== "visible") stopTyping(); };
+    window.addEventListener("blur", stopTyping);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      stopTyping();
+      window.removeEventListener("blur", stopTyping);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [chat?.id, stopTyping]);
   // menu states
   const [attachOpen, setAttachOpen] = useState(false);
 
@@ -94,26 +88,15 @@ export function useChatComposer({
     });
   };
 
-  const stopTyping = () => {
-    if (typingTimerRef.current) {
-      clearTimeout(typingTimerRef.current);
-      typingTimerRef.current = null;
-    }
-    if (typingRef.current) {
-      typingRef.current = false;
-      const cid = chat?.id ? String(chat.id) : null;
-      if (cid) onTypingStop?.(cid);
-    }
-  };
-
   const startTyping = () => {
-    if (!typingRef.current) {
+    const now = Date.now();
+    if (!typingRef.current || now - lastTypingStartRef.current >= 1500) {
       typingRef.current = true;
-      const cid = chat?.id ? String(chat.id) : null;
-      if (cid) onTypingStart?.(cid);
+      lastTypingStartRef.current = now;
+      if (prevChatIdRef.current) typingCallbacks.current.onTypingStart?.(prevChatIdRef.current);
     }
-    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-    typingTimerRef.current = setTimeout(() => stopTyping(), 900); // thòi gian typing
+    clearTimeout(typingTimerRef.current);
+    typingTimerRef.current = setTimeout(stopTyping, 900);
   };
 
   // close menus on outside click / ESC

@@ -15,7 +15,7 @@ const userSchema = new mongoose.Schema(
     // Danh sách bạn đã accept
     friends: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
-    // ✅ Profile fields (optional)
+    //  Profile fields (optional)
     gender: { type: String, enum: ["male", "female"], trim: true },
     // lưu dạng string để khỏi lệch timezone: "YYYY-MM-DD"
     dob: { type: String, trim: true },
@@ -25,7 +25,7 @@ const userSchema = new mongoose.Schema(
       resourceType: { type: String, trim: true, default: "image" },
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export default mongoose.model("User", userSchema);

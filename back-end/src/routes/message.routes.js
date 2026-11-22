@@ -4,7 +4,6 @@ import { validate } from "../middlewares/validate.js";
 import { getMessages, sendMessage } from "../controllers/message.controller.js";
 import {
   getMessagesRules,
-  sendMessageRules,
 } from "../validations/message.validation.js";
 import {
   editMessage,
@@ -15,7 +14,7 @@ import {
 const router = Router();
 
 router.get("/", requireAuth, getMessagesRules, validate, getMessages);
-router.post("/", requireAuth, sendMessageRules, validate, sendMessage);
+router.post("/", requireAuth, sendMessage);
 
 router.patch("/:id", requireAuth, editMessage);
 router.post("/:id/recall", requireAuth, recallMessage);

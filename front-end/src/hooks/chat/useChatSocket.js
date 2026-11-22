@@ -1,3 +1,4 @@
+import { mapMessage, mergeMessages } from "../../utils/chat/messageState.js";
 import { useEffect, useRef, useState } from "react";
 import { socket } from "../../socket/socket.js";
 import { bumpChat } from "../../utils/chat/chatPageHelpers.js";
@@ -103,71 +104,18 @@ export function useChatSocket({
       const sender = payload.sender || payload.senderId || null;
       const senderId = sender?.id ? String(sender.id) : null;
       const senderName = sender?.name ?? "User";
-      const createdAt = payload.createdAt ?? new Date().toISOString();
-
       const attachments = Array.isArray(payload.attachments)
         ? payload.attachments
         : [];
 
-      const uiMsg = {
-        id: String(payload.id ?? payload._id),
-        from: senderId === String(meId) ? "me" : "other",
-        senderId,
-        name: senderName,
-        avatarUrl: sender?.avatarUrl || null,
-        avatar: sender?.avatarUrl || avatarFromName(senderName),
-        text: payload.text ?? "",
-        attachments,
-        time: formatTime(createdAt),
-        createdAt,
-        replyTo: payload.replyTo || null,
-        reactions: Array.isArray(payload.reactions) ? payload.reactions : [],
-      };
-
+      const uiMsg = mapMessage(payload, meId);
       const cid = String(conversationId);
-      const incomingClientId = payload?.clientId
-        ? String(payload.clientId)
-        : null;
+      setMessagesByChatId(prev => ({ ...prev, [cid]: mergeMessages(prev[cid] || [], [uiMsg]) }));
 
-      setMessagesByChatId((prev) => {
-        const list = prev[cid] ?? [];
-
-        // ✅ nếu đã có message thật (server id) thì thôi
-        if (list.some((m) => m.id === uiMsg.id)) return prev;
-
-        // ✅ replace optimistic nếu match clientId
-        if (incomingClientId) {
-          const tmpId = `tmp:${incomingClientId}`;
-          const idx = list.findIndex(
-            (m) => m.id === tmpId || m.clientId === incomingClientId,
-          );
-          if (idx !== -1) {
-            // revoke blob urls (nếu có)
-            const old = list[idx];
-            (old?._blobUrls || []).forEach((u) => {
-              try {
-                URL.revokeObjectURL(u);
-              } catch {
-                // Ignore error (best effort logout)
-              }
-            });
-
-            const next = [...list];
-            next[idx] = {
-              ...uiMsg,
-              clientId: incomingClientId,
-              status: undefined,
-              errorMsg: "",
-              __retryPayload: undefined,
-            };
-            return { ...prev, [cid]: next };
-          }
-        }
-
-        // fallback: append
-        return { ...prev, [cid]: [...list, { ...uiMsg, pending: false }] };
-      });
-
+      if (payload.replay) {
+        reloadConversationsRef.current?.(String(meId)).catch(() => {});
+        return;
+      }
       const basePreview = uiMsg.text?.trim()
         ? uiMsg.text
         : previewTextFromAttachments(attachments);
@@ -182,9 +130,8 @@ export function useChatSocket({
           return prev;
         }
 
-        const isActive = cid === String(activeChatIdRef.current);
         const isFromMe = senderId === String(meId);
-        const shouldIncUnread = !isActive && !isFromMe;
+        const shouldIncUnread = !isFromMe;
 
         return bumpChat(prev, cid, (c) => {
           const isGroup = String(c.type || "direct") === "group";
@@ -327,14 +274,14 @@ export function useChatSocket({
       });
 
       // 3) reload conversations để sidebar/list cuộc trò chuyện + conversation info cập nhật avatar mới
-      if (typeof reloadConversations === "function")
-        reloadConversationsRef.current?.(String(meId));
+      reloadConversationsRef.current?.(String(meId));
     };
 
-    const onConversationRead = ({ conversationId, userId, at }) => {
+    const onConversationRead = ({ conversationId, userId, at, snapshot }) => {
       if (!conversationId || !userId || !at) return;
       const cid = String(conversationId);
       const uid = String(userId);
+      if (uid === String(meId) && !snapshot) reloadConversationsRef.current?.(String(meId)).catch(() => {});
 
       setLastReadByConvo((prev) => {
         const cur = prev[cid] || {};
@@ -350,6 +297,7 @@ export function useChatSocket({
     };
 
     const onConnect = () => {
+      reloadConversationsRef.current?.(String(meId)).catch(error => console.error("Conversation sync failed", error));
       const cid = activeChatIdRef.current;
       if (cid) {
         socket.emit("conversation:join", String(cid));
@@ -362,110 +310,25 @@ export function useChatSocket({
       }
     };
 
-    const onMessageReaction = (payload = {}) => {
+    const onMessageMutation = (payload = {}) => {
       const cid = String(payload.conversationId || "");
-      const mid = String(payload.messageId || "");
-      if (!cid || !mid) return;
-
-      const reactions = Array.isArray(payload.reactions)
-        ? payload.reactions
-        : [];
-
-      setMessagesByChatId((prev) => {
-        const list = prev[cid] ?? [];
-        const idx = list.findIndex((m) => String(m.id) === mid);
-        if (idx === -1) return prev;
-
-        const next = [...list];
-        next[idx] = { ...next[idx], reactions };
-        return { ...prev, [cid]: next };
-      });
+      if (!cid || !payload.id) return;
+      // All mutation events carry a complete serialized message and revision.
+      setMessagesByChatId(prev => ({ ...prev,
+        [cid]: mergeMessages(prev[cid] || [], [mapMessage(payload, meId)]),
+      }));
+      reloadConversationsRef.current?.(String(meId)).catch(() => {});
     };
+    const onMessageReaction = onMessageMutation;
+    const onMessageEdited = onMessageMutation;
+    const onMessageRecalled = onMessageMutation;
+    const onMessagePinned = onMessageMutation;
 
-    const onMessageEdited = (payload = {}) => {
-      const cid = String(payload.conversationId || "");
-      const mid = String(payload.messageId || "");
-      if (!cid || !mid) return;
-
-      setMessagesByChatId((prev) => {
-        const list = prev[cid] ?? [];
-        const idx = list.findIndex((m) => String(m.id) === mid);
-        if (idx === -1) return prev;
-
-        const next = [...list];
-        next[idx] = {
-          ...next[idx],
-          text: payload.text ?? next[idx].text,
-          editedAt: payload.editedAt,
-        };
-        return { ...prev, [cid]: next };
-      });
-    };
-
-    const onMessageRecalled = (payload = {}) => {
-      const cid = String(payload.conversationId || "");
-      const mid = String(payload.messageId || "");
-      if (!cid || !mid) return;
-
-      let updated = false;
-      let isLast = false;
-
-      setMessagesByChatId((prev) => {
-        const list = prev[cid] ?? [];
-        const idx = list.findIndex((m) => String(m.id) === mid);
-        if (idx === -1) return prev;
-
-        updated = true;
-        isLast = idx === list.length - 1;
-
-        const next = [...list];
-        next[idx] = {
-          ...next[idx],
-          text: payload.text ?? "Đã thu hồi tin nhắn",
-          attachments: Array.isArray(payload.attachments)
-            ? payload.attachments
-            : [],
-          reactions: Array.isArray(payload.reactions) ? payload.reactions : [],
-          isRecalled: true,
-          recalledAt: payload.recalledAt,
-        };
-        return { ...prev, [cid]: next };
-      });
-
-      // ✅ nếu tin bị recall là last message => update sidebar
-      if (updated && isLast) {
-        setChats((prev) =>
-          bumpChat(prev, cid, (c) => ({
-            ...c,
-            lastMessage: payload.text ?? "Đã thu hồi tin nhắn",
-          })),
-        );
-      } else {
-        // fallback: nếu chưa load messages của convo này -> reload list để chắc chắn
-        const fn = reloadConversationsRef.current;
-        if (typeof fn === "function") fn(String(meId)).catch(() => {});
-      }
-    };
-
-    const onMessagePinned = (payload = {}) => {
-      const cid = String(payload.conversationId || "");
-      const mid = String(payload.messageId || "");
-      if (!cid || !mid) return;
-
-      setMessagesByChatId((prev) => {
-        const list = prev[cid] ?? [];
-        const idx = list.findIndex((m) => String(m.id) === mid);
-        if (idx === -1) return prev;
-
-        const next = [...list];
-        next[idx] = {
-          ...next[idx],
-          pinned: !!payload.pinned,
-          pinnedAt: payload.pinnedAt,
-          pinnedBy: payload.pinnedBy,
-        };
-        return { ...prev, [cid]: next };
-      });
+    const onConversationRemoved = ({ conversationId }) => {
+      const cid = String(conversationId);
+      setChats(prev => prev.filter(c => String(c.id) !== cid));
+      setMessagesByChatId(prev => { const next = { ...prev }; delete next[cid]; return next; });
+      setTypingByConvo(prev => { const next = { ...prev }; delete next[cid]; return next; });
     };
 
     const onNotification = (payload) => {
@@ -503,6 +366,7 @@ export function useChatSocket({
     socket.on("conversation:new", onConversationNew);
 
     socket.on("conversation:updated", onConversationUpdated);
+    socket.on("conversation:removed", onConversationRemoved);
 
     if (socket.connected) {
       onConnect(); // vì connect event sẽ không bắn lại trong case StrictMode
@@ -528,10 +392,11 @@ export function useChatSocket({
       socket.off("conversation:new", onConversationNew);
 
       socket.off("conversation:updated", onConversationUpdated);
+      socket.off("conversation:removed", onConversationRemoved);
 
       didSyncPresenceRef.current = false;
     };
-  }, [meId, setChats, setMessagesByChatId, setOnlineIds]);
+  }, [meId, setChats, setMessagesByChatId, setOnlineIds, activeChatIdRef, setFriends, setMe]);
 
   return { typingByConvo, lastReadByConvo };
 }

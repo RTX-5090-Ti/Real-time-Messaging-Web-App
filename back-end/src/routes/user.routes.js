@@ -1,3 +1,4 @@
+import { httpLimit, limitUpload } from "../middlewares/rateLimit.js";
 import { Router } from "express";
 import { requireAuth } from "../middlewares/requireAuth.js";
 import {
@@ -18,7 +19,7 @@ router.get("/search", requireAuth, searchUserByEmail);
 //  profile
 router.get("/me", requireAuth, getMe);
 router.patch("/me", requireAuth, updateMe);
-router.patch("/me/avatar", requireAuth, uploadSingle, updateMyAvatar);
+router.patch("/me/avatar", requireAuth, httpLimit(limitUpload), uploadSingle, updateMyAvatar);
 
 router.get("/:id", requireAuth, getUserById);
 

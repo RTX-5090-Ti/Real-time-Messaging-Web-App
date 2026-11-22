@@ -1,3 +1,4 @@
+import { useVisibleRead } from "../../../hooks/chat/useVisibleRead.js";
 // src/components/chat/ChatWindow/MessagesPane.jsx
 import { MessageBubble } from "../MessageBubble.jsx";
 import TypingIndicator from "../TypingIndicator.jsx";
@@ -35,6 +36,8 @@ export default function MessagesPane({
   onEditMessage,
   onRecallMessage,
 }) {
+  useVisibleRead({ conversationId: chat?.id, messages, listRef });
+
   const handleMediaLoad = () => {
     if (atBottomRef.current) scrollToBottom(false);
   };

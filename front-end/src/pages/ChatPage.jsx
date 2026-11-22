@@ -1,3 +1,4 @@
+import { mapMessage, mergeMessages } from "../utils/chat/messageState.js";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -269,12 +270,8 @@ export default function ChatPage() {
 
     if (nextCid && socket.connected) {
       socket.emit("conversation:join", nextCid);
-      socket.emit("conversation:read", {
-        conversationId: nextCid,
-        at: new Date().toISOString(),
-      });
     }
-  }, [activeChatId, me?.id, me?.name]);
+  }, [activeChatId, me?.id, me?.name, joinedRoomRef]);
 
   // ✅ on unmount: leave current room
   useEffect(() => {
@@ -283,7 +280,7 @@ export default function ChatPage() {
       if (cid && socket.connected)
         socket.emit("conversation:leave", String(cid));
     };
-  }, []);
+  }, [joinedRoomRef]);
   const activeChat = useMemo(
     () => chats.find((c) => c.id === activeChatId) || null,
     [chats, activeChatId],
@@ -728,54 +725,24 @@ export default function ChatPage() {
         replyTo: replyTo || null,
       };
 
-      // 2) send (socket có ACK + timeout)
+      let message;
       if (socket.connected) {
-        await new Promise((resolve, reject) => {
+        const response = await new Promise((resolve, reject) => {
           socket.timeout(12000).emit("message:send", payload, (err, res) => {
             if (err) return reject(err);
             if (!res?.ok) return reject(new Error(res?.error || "SEND_FAILED"));
             resolve(res);
           });
         });
-        // ✅ không cần set "sent" ở đây, vì message:new sẽ về và replace
-        return;
-      }
-
-      // 3) fallback REST: nếu thành công thì replace luôn (vì offline không có socket message:new)
-      const res = await ChatAPI.sendMessage(cid, {
-        text: payload.text,
-        attachments: payload.attachments,
-        replyTo: payload.replyTo,
-      });
-      const m = res?.data?.message;
-      if (m?.id || m?._id) {
-        // map về format UI giống useChatHistory/useChatSocket
-        const sender = m.sender || m.senderId || {};
-        const senderName = sender.name ?? me?.name ?? "User";
-        const senderAvatarUrl =
-          sender.avatarUrl ?? sender.avatar?.url ?? sender.avatar ?? null;
-        const createdAt = m.createdAt || new Date().toISOString();
-        const uiMsg = {
-          id: String(m.id ?? m._id),
-          from: String(sender.id) === String(me?.id) ? "me" : "other",
-          name: senderName,
-          avatarUrl: senderAvatarUrl,
-          avatar: senderAvatarUrl || avatarFromName(senderName),
-          text: m.text ?? "",
-          attachments: Array.isArray(m.attachments) ? m.attachments : [],
-          time: formatTime(createdAt),
-          createdAt,
-        };
-        patchMessage(cid, tempId, {
-          ...uiMsg,
-          status: undefined,
-          errorMsg: "",
-          __retryPayload: undefined,
-        });
+        message = response.message;
       } else {
-        // nếu backend không trả message thì coi như fail
-        throw new Error("REST_SEND_NO_MESSAGE");
+        const response = await ChatAPI.sendMessage(cid, payload);
+        message = response.data?.message;
       }
+      if (!message?.id) throw new Error("SEND_NO_MESSAGE");
+      setMessagesByChatId(prev => ({ ...prev,
+        [cid]: mergeMessages(prev[cid] || [], [mapMessage(message, me?.id)]),
+      }));
     } catch (e) {
       console.error(e);
       markFailed(cid, tempId, "Failed • Retry");
@@ -1117,11 +1084,7 @@ export default function ChatPage() {
               setActiveChatId(id);
               setTab("chats");
               // mở chat => unread = 0
-              setChats((prev) =>
-                prev.map((c) =>
-                  c.id === String(id) ? { ...c, unread: 0 } : c,
-                ),
-              );
+
               setMobileView("chat");
               setInfoOpen(false);
             }}

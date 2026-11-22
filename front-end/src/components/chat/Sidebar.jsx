@@ -250,6 +250,17 @@ function IconBtn({ onClick, title, children, badge = 0 }) {
   );
 }
 
+  const getSystemDark = () =>
+    window.matchMedia &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+  const applyTheme = (mode) => {
+    const root = document.documentElement;
+    const shouldDark =
+      mode === "dark" || (mode === "system" && getSystemDark());
+    root.classList.toggle("dark", shouldDark);
+  };
+
 export default function Sidebar({
   me,
   chats,
@@ -283,17 +294,6 @@ export default function Sidebar({
   // THEME (Light / Dark / System)
   // =============================
   const THEME_KEY = "theme_mode"; // "light" | "dark" | "system"
-
-  const getSystemDark = () =>
-    window.matchMedia &&
-    window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-  const applyTheme = (mode) => {
-    const root = document.documentElement;
-    const shouldDark =
-      mode === "dark" || (mode === "system" && getSystemDark());
-    root.classList.toggle("dark", shouldDark);
-  };
 
   const [themeMode, setThemeMode] = useState(() => {
     try {

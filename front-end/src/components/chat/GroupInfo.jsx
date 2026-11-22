@@ -170,8 +170,9 @@ export default function GroupInfo({
 
   // ✅ admins + ownerId (để hiển thị đúng quyền)
   // ✅ admins + ownerId (đọc từ chat._raw vì mapConversationsToChats gói data ở đó)
-  const adminIds =
-    groupInfo?.adminIds || chat?._raw?.adminIds || chat?._raw?.admins || [];
+  const adminIds = useMemo(() =>
+    groupInfo?.adminIds || chat?._raw?.adminIds || chat?._raw?.admins || [],
+    [groupInfo?.adminIds, chat?._raw?.adminIds, chat?._raw?.admins]);
 
   const ownerId =
     groupInfo?.createdBy ||

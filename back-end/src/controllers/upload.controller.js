@@ -1,3 +1,4 @@
+import Upload from "../models/Upload.js";
 import { cloudinary } from "../config/cloudinary.js";
 
 function detectKind(mime = "") {
@@ -44,6 +45,13 @@ export async function uploadSingleFile(req, res) {
       filename: req.file.originalname || "",
     });
 
+    try {
+      await Upload.create({ ownerId: req.user.id, publicId: result.public_id, resourceType, url: result.secure_url });
+    } catch (error) {
+      await cloudinary.uploader.destroy(result.public_id, { resource_type: resourceType });
+      throw error;
+    }
+
     return res.status(201).json({
       file: {
         // frontend của mày đang coi gif như image => tao map gif về "image" cho đỡ sửa nhiều
@@ -69,15 +77,19 @@ export async function deleteUploadedFile(req, res) {
   const publicId = req.body?.publicId;
   const resourceType = req.body?.resourceType || "image";
 
-  if (!publicId) {
+  if (typeof publicId !== "string" || !publicId || !["image", "raw"].includes(resourceType)) {
     return res.status(400).json({ message: "publicId is required" });
   }
 
   try {
+    const upload = await Upload.findOne({ publicId, resourceType, ownerId: req.user.id });
+    if (!upload) return res.status(403).json({ message: "Kh?ng c? quy?n x?a file n?y" });
     const result = await cloudinary.uploader.destroy(publicId, {
       resource_type: resourceType,
     });
 
+    if (!["ok", "not found"].includes(result.result)) throw new Error("Delete failed");
+    await Upload.deleteOne({ _id: upload._id });
     return res.json({ ok: true, result });
   } catch (err) {
     console.error("Cloudinary delete error:", err);

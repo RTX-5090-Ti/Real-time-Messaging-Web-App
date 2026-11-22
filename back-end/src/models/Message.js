@@ -74,7 +74,8 @@ const messageSchema = new mongoose.Schema(
       targetName: { type: String, default: "" },
     },
 
-    text: { type: String, trim: true, default: "" },
+    clientId: { type: String, maxlength: 128 },
+    text: { type: String, trim: true, default: "", maxlength: 10000 },
     attachments: { type: [attachmentSchema], default: [] },
 
     //  Reply
@@ -109,10 +110,11 @@ const messageSchema = new mongoose.Schema(
     },
   },
 
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
 
-messageSchema.index({ conversationId: 1, createdAt: -1 });
+messageSchema.index({ conversationId: 1, createdAt: -1, _id: -1 });
+messageSchema.index({ conversationId: 1, senderId: 1, clientId: 1 }, { unique: true, partialFilterExpression: { clientId: { $type: "string" } }, name: "message_client_id_unique" });
 messageSchema.index({ conversationId: 1, senderId: 1, createdAt: -1 });
 
 export default mongoose.model("Message", messageSchema);

@@ -43,7 +43,7 @@ A **Messenger-like real-time chat application** built with **MERN Stack** and **
 
 - Create group conversation
 - Add members / Leave group
-- Owner/Admin permissions
+- Owner/Admin permissions and transactional membership updates
 - System messages:
   - `A added B to the group`
   - `A left the group`
@@ -66,7 +66,7 @@ A **Messenger-like real-time chat application** built with **MERN Stack** and **
 ### Reliability
 
 - Message status: `sending → retry → sent`
-- Auto retry when reconnect / back online
+- Manual retry for failed sends; automatic history synchronization on reconnect
 
 ---
 
@@ -116,3 +116,56 @@ A **Messenger-like real-time chat application** built with **MERN Stack** and **
 ---
 
 ## 📁 Project Structure
+
+
+## Reliability and security setup
+
+After pulling these changes, run `npm run migrate:chat` from `back-end` before
+restarting the API. This installs the partial unique direct-conversation index
+and the message idempotency index, and removes only the known old sparse direct
+index. It does not delete conversations or messages.
+
+Both HTTP and Socket.IO message sends require a stable `clientId` (1?128 letters,
+numbers, underscores or hyphens). Reuse it when retrying the same send. The ACK
+includes the saved message. History pagination uses both `before` and `beforeId`.
+Reconnect re-reads the open conversation through its oldest cached message and
+refreshes the conversation list; other conversations reconcile when opened.
+
+Uploads now record ownership. Legacy assets without ownership metadata cannot
+be deleted through the upload endpoint; ownership must be established before
+backfilling those records. No ownership is inferred from a URL or caller input.
+
+Limits per server: authentication 20 attempts/15 minutes/IP, message operations
+60/minute/user, typing 120/minute/user, uploads 30/minute/user. These in-memory
+limits must use a shared store before deploying multiple API instances.
+Messages allow 10,000 characters and up to 10 attachments with HTTPS URLs.
+
+Run `npm test` in `back-end` for offline tests. To also run DB integration tests
+in PowerShell: `$env:CHAT_TEST_DB='1'; npm test`. These tests use a uniquely named
+temporary database with the configured MongoDB credentials, then drop only that
+test database. They never insert test messages into the application's database.
+
+
+## Read receipts, typing and concurrent updates
+
+Read receipts are sent only for a saved message visible in a focused chat pane.
+Opening a chat or receiving a message in a background tab does not mark it read.
+The server derives the read time from the referenced message and advances the
+watermark atomically. Join/reconnect also restores the saved read receipts.
+
+Typing sends a heartbeat while the user continues entering text. Each socket
+has its own expiry; closing one tab does not stop another tab's typing. Leaving
+or being removed from a group removes every socket of that user from its room.
+
+Group membership, ownership/admin transfer, system messages and kick notifications
+commit in a MongoDB transaction. MongoDB must be a replica set (Atlas supports
+this); a standalone local MongoDB server must be configured as a replica set.
+Message mutations use optimistic concurrency and retry conflicting writes.
+Clients merge full message revisions so delayed events cannot undo newer edits.
+
+Conversation summaries use one aggregation plus one user lookup, rather than
+separate message/count queries per conversation. Sorting uses last message
+activity (creation time for empty chats), never read/profile update time.
+
+Socket handlers are split into conversation, message and typing modules. Group,
+read receipt, message and conversation-list logic live in shared services.

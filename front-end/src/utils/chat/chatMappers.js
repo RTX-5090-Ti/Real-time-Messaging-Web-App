@@ -10,7 +10,6 @@ export function mapConversationsToChats({
     const x =
       c?.lastMessage?.createdAt ??
       c?.lastMessageAt ??
-      c?.updatedAt ??
       c?.createdAt ??
       0;
     const t = new Date(x).getTime();
