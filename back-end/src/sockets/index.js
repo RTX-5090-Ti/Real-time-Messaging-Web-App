@@ -1,3 +1,4 @@
+import { assertSessionActive, authError } from "../services/session.service.js";
 import { authSocket } from "./authSocket.js";
 import { createTypingTracker } from "./typing.js";
 import { registerConversationHandlers } from "./conversation.handlers.js";
@@ -37,6 +38,17 @@ export function initSocket(io) {
 
   io.on("connection", (socket) => {
     const userId = socket.user.id;
+    socket.join(`session:${socket.auth.sessionId}`);
+    assertSessionActive(socket.auth.sessionId, userId).catch(() => {
+      socket.emit("auth:revoked", { code: "SESSION_REVOKED" });
+      socket.disconnect(true);
+    });
+    const expire = () => {
+      socket.emit("auth:expired", { code: "ACCESS_EXPIRED" });
+      socket.disconnect(true);
+    };
+    const expiryTimer = setTimeout(expire, Math.max(0, socket.auth.expiresAt - Date.now()));
+    expiryTimer.unref?.();
     const on = (event, handler) => socket.on(event, async (payload, callback) => {
       let replied = false;
       const ack = (result) => {
@@ -49,12 +61,18 @@ export function initSocket(io) {
         if (event.startsWith("typing:")) limitTyping(String(userId));
         if (!["presence:sync", "conversation:join", "conversation:leave", "conversation:read"].includes(event) &&
             (!payload || typeof payload !== "object" || Array.isArray(payload))) fail("INVALID_PAYLOAD");
+        if (socket.auth.expiresAt <= Date.now()) throw authError("ACCESS_EXPIRED");
+        await assertSessionActive(socket.auth.sessionId, userId);
         await handler(payload, ack);
         ack({ ok: true });
       } catch (err) {
         if (!err.status) console.error(event, err);
         const error = err.status ? err.message : "SERVER_ERROR";
         ack({ ok: false, error, retryAfter: err.retryAfter });
+        if (err.status === 401) {
+          if (err.code === "ACCESS_EXPIRED") expire();
+          else { socket.emit("auth:revoked", { code: err.code }); socket.disconnect(true); }
+        }
         if (typeof callback !== "function") socket.emit("operation:error", { event, error });
       }
     });
@@ -79,6 +97,7 @@ export function initSocket(io) {
     registerMessageHandlers(socket, on, typing);
 
     socket.on("disconnect", () => {
+      clearTimeout(expiryTimer);
       typing.disconnect(socket);
       const becameOffline = removeOnline(userId, socket.id);
       if (becameOffline) {

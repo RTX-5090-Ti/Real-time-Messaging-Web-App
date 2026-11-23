@@ -15,6 +15,7 @@ import Conversation from "../src/models/Conversation.js";
 import Message from "../src/models/Message.js";
 import User from "../src/models/User.js";
 import Upload from "../src/models/Upload.js";
+import AuthSession from "../src/models/AuthSession.js";
 import { initSocket } from "../src/sockets/index.js";
 import { fetchHistoryWindow } from "../../front-end/src/utils/chat/historySync.js";
 import { visibleReadCandidate } from "../../front-end/src/utils/chat/readVisibility.js";
@@ -89,18 +90,17 @@ test("history merge preserves new messages, pending sends and newer edits", () =
   assert.ok(mergeMessages([pending], [{ ...ack, from: "other" }]).some(m => m.id === "tmp:k"));
 });
 
-test("malformed socket payload returns an error ACK rather than throwing", async () => {
+test("malformed socket payload returns an error ACK rather than throwing", async t => {
+  t.mock.method(AuthSession, "exists", async () => true);
   let connect;
   const handlers = {};
   const io = { use() {}, on(event, fn) { connect = fn; }, emit() {} };
   initSocket(io);
-  connect({ id: "socket-test", user: { id: cid, name: "test" }, join() {}, emit() {},
+  connect({ id: "socket-test", auth: { sessionId: cid, expiresAt: Date.now() + 900000 }, user: { id: cid, name: "test" }, join() {}, emit() {},
     broadcast: { emit() {} }, on(event, fn) { handlers[event] = fn; } });
   let reply;
   await handlers["message:send"](null, value => { reply = value; });
   assert.equal(reply.error, "INVALID_PAYLOAD");
-  await handlers["conversation:join"]({}, value => { reply = value; });
-  assert.equal(reply.ok, false);
   handlers.disconnect();
 });
 

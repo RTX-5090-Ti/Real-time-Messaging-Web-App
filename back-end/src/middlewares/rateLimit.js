@@ -18,6 +18,7 @@ export function createLimiter(limit, windowMs) {
     });
   };
 }
+export const limitRefresh = createLimiter(120, 15 * 60 * 1000);
 export const limitAuth = createLimiter(20, 15 * 60 * 1000);
 export const limitMessage = createLimiter(60, 60 * 1000);
 export const limitTyping = createLimiter(120, 60 * 1000);

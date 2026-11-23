@@ -1,19 +1,17 @@
 import cookie from "cookie";
-import { verifyToken } from "../utils/jwt.js";
+import { authenticateAccess } from "../services/session.service.js";
+import { isTrustedOrigin } from "../middlewares/csrf.js";
 import User from "../models/User.js";
 
 // Xác thực Socket.io bằng JWWT lưu trong token
 // Socket chỉ connect nếu cookie có JWT hợp lệ → decode → tìm thấy user → gắn user vào socket
 export async function authSocket(socket, next) {
   try {
-    const cookieHeader = socket.handshake.headers.cookie;
-    if (!cookieHeader) return next(new Error("No cookie"));
-
-    const cookies = cookie.parse(cookieHeader);
-    const token = cookies[process.env.COOKIE_NAME || "access_token"];
-    if (!token) return next(new Error("No token"));
-
-    const decoded = verifyToken(token);
+    const origin = socket.handshake.headers.origin;
+    if (origin && !isTrustedOrigin(origin)) throw Object.assign(new Error("UNTRUSTED_ORIGIN"), { code: "UNTRUSTED_ORIGIN" });
+    const cookies = cookie.parse(socket.handshake.headers.cookie || "");
+    const decoded = await authenticateAccess(cookies[process.env.COOKIE_NAME || "access_token"]);
+    socket.auth = { sessionId: decoded.sid, expiresAt: decoded.exp * 1000, userId: decoded.sub };
     const user = await User.findById(decoded.sub).select(
       "_id name email role avatar"
     ); //decoded.sub = userId
@@ -28,7 +26,9 @@ export async function authSocket(socket, next) {
     };
 
     next();
-  } catch {
-    next(new Error("Socket auth failed"));
+  } catch (error) {
+    const failure = new Error(error.status === 401 ? error.code : "Socket auth failed");
+    failure.data = { code: error.code || "AUTH_FAILED" };
+    next(failure);
   }
 }

@@ -6,10 +6,13 @@ import app from "./app.js";
 import { connectDB } from "./config/db.js";
 import { initSocket } from "./sockets/index.js";
 import { setIO } from "./sockets/io.js";
+import AuthSession from "./models/AuthSession.js";
+import RefreshToken from "./models/RefreshToken.js";
 
 const PORT = process.env.PORT || 5000;
 
 await connectDB(process.env.MONGO_URI);
+await Promise.all([AuthSession.init(), RefreshToken.init()]);
 
 const httpSever = http.createServer(app);
 

@@ -1,4 +1,4 @@
-import { verifyToken } from "../utils/jwt.js";
+import { authenticateAccess } from "../services/session.service.js";
 import User from "../models/User.js";
 
 // Bảo vệ route (chỉ user hợp lệ mới vào được API)
@@ -8,11 +8,8 @@ export async function requireAuth(req, res, next) {
     const cookieName = process.env.COOKIE_NAME || "access_token";
     const token = req.cookies?.[cookieName];
 
-    if (!token) return res.status(401).json({ message: "Chưa đăng nhập" });
-
-    // Verify JWT
-    const decoded = verifyToken(token);
-    // Lấy user từ DB
+    const decoded = await authenticateAccess(token);
+    req.auth = decoded;
     const user = await User.findById(decoded.sub).select(
       "_id name email role gender dob avatar"
     );
@@ -30,7 +27,8 @@ export async function requireAuth(req, res, next) {
       avatarUrl: user.avatar?.url || null,
     };
     next();
-  } catch {
-    return res.status(401).json({ message: "Token không hợp lệ" });
+  } catch (error) {
+    if (error.status !== 401) return next(error);
+    return res.status(401).json({ message: error.code, code: error.code });
   }
 }

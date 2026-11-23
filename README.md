@@ -29,7 +29,8 @@ A **Messenger-like real-time chat application** built with **MERN Stack** and **
 ### Authentication & Security
 
 - Register / Login / Logout
-- JWT stored in **HTTP-only cookie**
+- 15-minute access JWT and rotating refresh token in **HTTP-only cookies**
+- Server-side sessions, refresh reuse detection and logout revocation
 - Protected routes (Require Auth)
 
 ### 1-1 Chat (Direct)
@@ -98,7 +99,7 @@ A **Messenger-like real-time chat application** built with **MERN Stack** and **
 
 ## System Architecture (High level)
 
-- Client login → Server returns **JWT cookie**
+- Client login → Server returns **access and refresh cookies**
 - REST API for:
   - conversations
   - messages
@@ -119,6 +120,34 @@ A **Messenger-like real-time chat application** built with **MERN Stack** and **
 
 
 ## Reliability and security setup
+
+### Access tokens and refresh sessions
+
+Access JWTs expire after 15 minutes (`ACCESS_TOKEN_TTL_SECONDS=900`, maximum 900).
+Refresh tokens are random secrets stored in an HttpOnly cookie scoped to `/auth`;
+only their SHA-256 hashes are stored in MongoDB. Each login session lasts a fixed
+7 days. `POST /auth/refresh` rotates the refresh token without extending that
+deadline. Reusing a consumed refresh token revokes that session, including its
+access tokens and connected sockets. Logout revokes the current browser session
+and clears both cookies; separate device sessions remain signed in.
+
+Axios retries an expired-access request once after refresh. Socket.IO disconnects
+at access expiry and reconnects with refreshed cookies. Concurrent refreshes share
+one promise per tab; Web Locks serialize refresh/logout across tabs on supported
+browsers (HTTPS or localhost). Without Web Locks, only same-tab coordination is
+available; concurrent refreshes across tabs can trigger reuse protection and
+require login again. Tokens are never stored in localStorage.
+
+Set `CLIENT_ORIGIN` to the exact frontend origin. Authentication POSTs and
+cookie-authenticated mutations require that Origin header; API tools must send
+it too. Production cookies use `Secure` and `SameSite=None`, so deploy over HTTPS.
+Session/token collections and indexes initialize on backend startup. MongoDB
+transactions require a replica set, including for login and refresh.
+
+Restart the backend and sign in again after this update: old JWTs lack the new
+session claims. Development still uses `npm run dev` in each project directory.
+`JWT_EXPIRES_IN` is replaced by `ACCESS_TOKEN_TTL_SECONDS`; `REFRESH_COOKIE_NAME`
+defaults to `refresh_token`. The existing `COOKIE_NAME` remains the access cookie.
 
 After pulling these changes, run `npm run migrate:chat` from `back-end` before
 restarting the API. This installs the partial unique direct-conversation index
@@ -169,3 +198,40 @@ activity (creation time for empty chats), never read/profile update time.
 
 Socket handlers are split into conversation, message and typing modules. Group,
 read receipt, message and conversation-list logic live in shared services.
+
+
+## Verification (checklist 5)
+
+Install dependencies in both `back-end` and `front-end` with `npm ci`.
+
+| Directory | Command | Coverage |
+| --- | --- | --- |
+| `back-end` | `npm test` | Offline validation, state merge, typing, visibility and reconnect helper tests; DB suites are skipped unless `CHAT_TEST_DB=1`. |
+| `back-end` | `npm run test:integration` | All backend tests, including actual HTTP/Socket.IO connections and isolated MongoDB fixtures. Requires `MONGO_URI` in `.env`. |
+| `front-end` | `npm test` | React component and hook tests in jsdom. |
+| `front-end` | `npm run lint` | ESLint checks. |
+| `front-end` | `npm run build` | Production build. |
+
+`back-end/test/transport.test.js` starts its own HTTP/Socket.IO server bound to
+127.0.0.1 on an ephemeral port. Test accounts are created through register/login;
+real cookies authenticate subsequent HTTP requests and socket handshakes.
+It covers unauthorized access, concurrent direct creation, multiple groups,
+lost ACK and retry, REST send/edit/pin/recall delivery, reconnect across 205 missed
+messages, unread/read receipts, multi-tab typing/presence and group-room eviction.
+It never sends messages to application users or calls Cloudinary to delete files.
+
+Each DB suite creates its own `chat_test_*` database and drops only that database
+in teardown. The configured MongoDB account must be able to create/drop test
+databases and support transactions. Never point these tests at a service whose
+policies prohibit temporary test databases.
+
+`front-end/test/chat.test.jsx` mounts the actual chat page after a mocked login,
+checks ACK-only send confirmation and listener cleanup, exercises delayed history
+responses and chat switching, and checks that seen waits for visibility/focus.
+The DOM suite mocks HTTP/socket boundaries and browser layout; it does not replace
+manual testing in real browsers or a visual/mobile layout check.
+
+`back-end/test/auth.test.js` verifies cookie flags, token expiry/rotation, reuse,
+origin rejection, concurrent refresh, session revocation and socket expiry against
+real HTTP/Socket.IO and an isolated database. Frontend session tests cover retry
+limits, shared refresh, cross-tab locking, logout races and socket recovery.

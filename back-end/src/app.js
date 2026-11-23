@@ -1,3 +1,4 @@
+import { requireTrustedOrigin } from "./middlewares/csrf.js";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -26,6 +27,11 @@ app.use(
 
 app.use(express.json());
 app.use(cookieParser());
+app.use((req, res, next) => {
+  if (!["GET", "HEAD", "OPTIONS"].includes(req.method) && Object.keys(req.cookies || {}).length)
+    return requireTrustedOrigin(req, res, next);
+  next();
+});
 
 app.get("/health", (req, res) => {
   res.json({
@@ -59,6 +65,7 @@ app.use((err, req, res, next) => {
   const status = err.status || 500;
   res.status(status).json({
     message: err.message || "Server error",
+    ...(err.code && err.status === 401 ? { code: err.code } : {}),
   });
 });
 

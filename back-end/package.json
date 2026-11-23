@@ -7,14 +7,16 @@
     "test": "node --test",
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "migrate:chat": "node scripts/migrate-chat-indexes.js"
+    "migrate:chat": "node scripts/migrate-chat-indexes.js",
+    "test:integration": "node scripts/run-integration.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "nodemon": "^3.1.11"
+    "nodemon": "^3.1.11",
+    "socket.io-client": "^4.8.3"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

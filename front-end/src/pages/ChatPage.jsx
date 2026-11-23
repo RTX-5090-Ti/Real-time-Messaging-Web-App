@@ -28,6 +28,11 @@ import CreateGroupModal from "../components/chat/CreateGroupModal.jsx";
 
 export default function ChatPage() {
   const navigate = useNavigate();
+  useEffect(() => {
+    const onSessionEnded = () => navigate("/auth", { replace: true });
+    window.addEventListener("auth:ended", onSessionEnded);
+    return () => window.removeEventListener("auth:ended", onSessionEnded);
+  }, [navigate]);
 
   const [mobileView, setMobileView] = useState("list"); // "list" | "chat"
 
@@ -988,7 +993,8 @@ export default function ChatPage() {
     try {
       await AuthAPI.logout();
     } catch {
-      // ignore
+      alert("Logout failed. Check your connection and try again.");
+      return;
     }
 
     try {
