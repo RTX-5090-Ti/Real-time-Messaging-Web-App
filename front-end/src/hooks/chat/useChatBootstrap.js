@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AuthAPI } from "../../api/auth.api.js";
+import { unauthenticated } from "../../api/sessionClient.js";
 import { ChatAPI } from "../../api/chat.api.js";
 import {
   mapConversationsToChats,
@@ -9,6 +10,14 @@ import { avatarFromName, formatTimeOrDate } from "../../utils/chatUi.js";
 
 export function useChatBootstrap({ navigate }) {
   const [me, setMe] = useState(null);
+  const [bootstrapError, setBootstrapError] = useState(false);
+  const [bootstrapLoading, setBootstrapLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
+  const retryBootstrap = () => {
+    setBootstrapError(false);
+    setBootstrapLoading(true);
+    setAttempt(value => value + 1);
+  };
 
   const [chats, setChats] = useState([]);
   const [friends, setFriends] = useState([]);
@@ -132,8 +141,11 @@ export function useChatBootstrap({ navigate }) {
           setActiveChatId(mappedChats[0].id);
         }
       } catch (e) {
-        console.warn("Auth/me failed -> go /auth", e?.message || e);
-        navigate("/auth", { replace: true });
+        if (cancelled || e?.code === "STALE_SESSION") return;
+        if (unauthenticated(e)) navigate("/auth", { replace: true });
+        else setBootstrapError(true);
+      } finally {
+        if (!cancelled) setBootstrapLoading(false);
       }
     })();
 
@@ -141,9 +153,10 @@ export function useChatBootstrap({ navigate }) {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [attempt]);
 
   return {
+    bootstrapError, bootstrapLoading, retryBootstrap,
     me,
     setMe,
 

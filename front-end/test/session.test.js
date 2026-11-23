@@ -5,6 +5,45 @@ const expired = () => ({ response: { status: 401, data: { code: "ACCESS_EXPIRED"
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 
 describe("refresh coordination", () => {
+  it("ignores a late refresh failure from a previous login generation", async () => {
+    let reject;
+    const raw = { get: vi.fn().mockRejectedValue(expired()), post: vi.fn(() => new Promise((_, fail) => { reject = fail; })) };
+    const notify = vi.fn();
+    const session = createSessionClient(raw, { notify });
+    const pending = session.refresh().catch(() => {});
+    await vi.waitFor(() => expect(raw.post).toHaveBeenCalled());
+    session.started();
+    reject(expired());
+    await pending;
+    expect(notify).not.toHaveBeenCalledWith("auth:ended", expect.anything());
+    raw.get.mockResolvedValue({});
+    await expect(session.refresh()).resolves.toBeUndefined();
+  });
+
+  it("waits for refresh before login replaces cookies", async () => {
+    const gate = deferred();
+    const raw = { get: vi.fn().mockRejectedValue(expired()), post: vi.fn(path => path === "/auth/refresh" ? gate.promise : Promise.resolve({ data: { user: {} } })) };
+    const session = createSessionClient(raw, { notify: vi.fn() });
+    const pending = session.refresh().catch(() => {});
+    await vi.waitFor(() => expect(raw.post).toHaveBeenCalledTimes(1));
+    const login = session.authenticate("/auth/login", {});
+    expect(raw.post).toHaveBeenCalledTimes(1);
+    gate.resolve({});
+    await Promise.all([pending, login]);
+    expect(raw.post.mock.calls.map(call => call[0])).toEqual(["/auth/refresh", "/auth/login"]);
+  });
+
+  it("rejects stale responses without ending or retrying the new session", async () => {
+    let request, success, failure;
+    const session = createSessionClient({}, { notify: vi.fn() });
+    const api = { interceptors: { request: { use: fn => { request = fn; } }, response: { use: (ok, fail) => { success = ok; failure = fail; } } } };
+    installSessionInterceptor(api, session);
+    const config = request({ url: "/messages" });
+    session.started();
+    expect(() => success({ config, data: {} })).toThrow("Session changed");
+    await expect(failure({ ...expired(), config })).rejects.toMatchObject({ code: "STALE_SESSION" });
+    expect(session.generation()).toBe(1);
+  });
   it("concurrent requests in a tab share one refresh", async () => {
     const gate = deferred();
     const raw = { get: vi.fn().mockRejectedValue(expired()), post: vi.fn().mockReturnValue(gate.promise) };
@@ -64,6 +103,7 @@ describe("refresh coordination", () => {
     expect((await rejected({ ...expired(), config })).data).toBe("ok");
     expect(config._retried).toBe(true);
     await expect(rejected({ ...expired(), config })).rejects.toBeTruthy();
+    expect(session.ended).toHaveBeenCalledTimes(1);
     await expect(rejected({ ...expired(), config: { url: "/auth/login" } })).rejects.toBeTruthy();
     expect(session.refresh).toHaveBeenCalledTimes(1);
   });

@@ -9,7 +9,7 @@ export default function App() {
       <Route path="/home" element={<ChatApp />} />
 
       {/* default */}
-      <Route path="*" element={<Navigate to="/auth" replace />} />
+      <Route path="*" element={<Navigate to="/home" replace />} />
     </Routes>
   );
 }

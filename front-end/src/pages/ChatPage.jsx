@@ -9,6 +9,7 @@ import SearchFriendModal from "../components/chat/SearchFriendModal.jsx";
 
 import { socket } from "../socket/socket.js";
 import { AuthAPI } from "../api/auth.api.js";
+import SessionStatus from "../components/auth/SessionStatus.jsx";
 import { ChatAPI } from "../api/chat.api.js";
 
 import { avatarFromName, formatTime } from "../utils/chatUi.js";
@@ -116,6 +117,7 @@ export default function ChatPage() {
 
   // core states + bootstrap
   const {
+    bootstrapError, bootstrapLoading, retryBootstrap,
     me,
     setMe,
     chats,
@@ -1029,15 +1031,11 @@ export default function ChatPage() {
     }
   };
 
-  if (!me) {
+  if (bootstrapError || bootstrapLoading || !me) {
     // ✅ Delete chat (hide conversation for me)
 
     return (
-      <div className="w-full h-screen grid place-items-center bg-gradient-to-r from-[#b06ab3] to-[#4568dc]">
-        <div className="px-4 py-3 text-white rounded-xl bg-black/20">
-          Loading...
-        </div>
-      </div>
+      <SessionStatus error={bootstrapError} onRetry={retryBootstrap} />
     );
   }
 

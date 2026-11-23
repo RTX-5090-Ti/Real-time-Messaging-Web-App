@@ -16,5 +16,5 @@ if (channel) channel.onmessage = event => { if (event.data === "logout") session
 installSessionInterceptor(api, session);
 export const refreshSession = () => session.refresh();
 export const logoutSession = () => session.logout();
-export const loginSucceeded = () => session.started();
+export const authenticateSession = (path, body) => session.authenticate(path, body);
 export const endSession = () => session.ended();

@@ -5,6 +5,7 @@ import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@t
 import ChatPage from "../src/pages/ChatPage.jsx";
 import { useChatHistory } from "../src/hooks/chat/useChatHistory.js";
 import { useVisibleRead } from "../src/hooks/chat/useVisibleRead.js";
+import { useChatBootstrap } from "../src/hooks/chat/useChatBootstrap.js";
 import { mapMessage, mergeMessages } from "../src/utils/chat/messageState.js";
 
 const mocks = vi.hoisted(() => {
@@ -59,6 +60,20 @@ function useHistoryHarness(activeChatId = cid) {
 }
 
 describe("chat page after login", () => {
+  it.each(["/auth/me", "/friends"])("keeps network/server failure at %s out of login and allows retry", async path => {
+    const normal = mocks.get.getMockImplementation();
+    let fail = true;
+    mocks.get.mockImplementation(url => url === path && fail ? Promise.reject({ response: { status: 500 } }) : normal(url));
+    const navigate = vi.fn();
+    const { result } = renderHook(() => useChatBootstrap({ navigate }));
+    await waitFor(() => expect(result.current.bootstrapError).toBe(true));
+    expect(navigate).not.toHaveBeenCalled();
+    fail = false;
+    act(() => result.current.retryBootstrap());
+    await waitFor(() => expect(result.current.bootstrapLoading).toBe(false));
+    expect(result.current.bootstrapError).toBe(false);
+    expect(result.current.me.id).toBe(me.id);
+  });
   it("renders history using the actual page/hook wiring and cleans socket listeners on unmount", async () => {
     const view = render(<MemoryRouter><ChatPage /></MemoryRouter>);
     expect(await screen.findByText("History message")).toBeTruthy();

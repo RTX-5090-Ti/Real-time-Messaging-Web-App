@@ -1,8 +1,8 @@
-import { api, logoutSession, loginSucceeded } from "./axios.js";
+import { api, logoutSession, authenticateSession } from "./axios.js";
 
 export const AuthAPI = {
-  login: async (email, password) => { const result = await api.post("/auth/login", { email, password }); loginSucceeded(); return result; },
-  register: async (name, email, password) => { const result = await api.post("/auth/register", { name, email, password }); loginSucceeded(); return result; },
+  login: (email, password) => authenticateSession("/auth/login", { email, password }),
+  register: (name, email, password) => authenticateSession("/auth/register", { name, email, password }),
   me: () => api.get("/auth/me"),
   logout: () => logoutSession(),
 };

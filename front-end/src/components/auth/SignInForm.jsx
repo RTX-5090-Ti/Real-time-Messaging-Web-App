@@ -1,23 +1,25 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import GradientButton from "./GradientButton";
 import TextInput from "./TextInput";
-import ForgotPasswordModal from "./ForgotPasswordModal";
 import { AuthAPI } from "../../api/auth.api.js";
 
 export default function SignInForm({ onSignUp, onSuccess }) {
-  const [openForgot, setOpenForgot] = useState(false);
+  const [showForgotToast, setShowForgotToast] = useState(false);
+  const [toastVersion, setToastVersion] = useState(0);
+  const toastTimer = useRef(null);
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const handleChangePassword = (data) => {
-    // TODO: gọi API change password ở đây
-    console.log("Change password payload:", data);
-
-    // đóng modal sau khi submit (demo)
-    setOpenForgot(false);
+  const handleForgotPassword = () => {
+    clearTimeout(toastTimer.current);
+    setToastVersion(value => value + 1);
+    setShowForgotToast(true);
+    toastTimer.current = setTimeout(() => setShowForgotToast(false), 3000);
   };
 
   const handleSubmit = async (e) => {
@@ -31,8 +33,7 @@ export default function SignInForm({ onSignUp, onSuccess }) {
 
     try {
       setSubmitting(true);
-      await AuthAPI.login(email.trim(), password);
-      const { data } = await AuthAPI.me();
+      const { data } = await AuthAPI.login(email.trim(), password);
       onSuccess?.(data?.user);
     } catch (err) {
       const msg =
@@ -79,7 +80,7 @@ export default function SignInForm({ onSignUp, onSuccess }) {
         {/* đổi thành button để khỏi nhảy trang */}
         <button
           type="button"
-          onClick={() => setOpenForgot(true)}
+          onClick={handleForgotPassword}
           className="text-[14px] text-[#333] my-4 hover:underline cursor-pointer"
         >
           Forgot your password?
@@ -103,11 +104,19 @@ export default function SignInForm({ onSignUp, onSuccess }) {
         </p>
       </form>
 
-      <ForgotPasswordModal
-        open={openForgot}
-        onClose={() => setOpenForgot(false)}
-        onSubmit={handleChangePassword}
-      />
+      {createPortal(
+        <div className="pointer-events-none fixed inset-x-4 z-[300] flex justify-center" style={{ bottom: "max(24px, env(safe-area-inset-bottom))" }} role="status" aria-live="polite" aria-atomic="true">
+          {showForgotToast && (
+            <div key={toastVersion} className="auth-feature-toast relative w-full max-w-sm overflow-hidden rounded-2xl border border-white/80 bg-white/95 p-4 shadow-[0_12px_40px_-10px_rgba(65,32,115,0.4)] backdrop-blur-xl">
+              <p className="text-center text-sm leading-5 text-[#513a83]">Tính năng này đang được phát triển</p>
+              <div className="absolute inset-x-0 bottom-0 h-[3px] bg-violet-100" aria-hidden="true">
+                <div className="auth-feature-toast-progress h-full origin-left bg-gradient-to-r from-[#b06ab3] to-[#4568dc]" />
+              </div>
+            </div>
+          )}
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

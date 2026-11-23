@@ -1,5 +1,7 @@
 export const refreshable = error => error?.response?.status === 401 &&
   ["NO_ACCESS_TOKEN", "ACCESS_EXPIRED"].includes(error.response.data?.code);
+export const unauthenticated = error => error?.response?.status === 401 || error?.code === "SESSION_ENDED";
+const sessionEnded = () => Object.assign(new Error("Session ended"), { code: "SESSION_ENDED" });
 
 // raw has no response interceptor: refresh failures cannot recursively refresh.
 export function createSessionClient(raw, { notify, lock = work => work() }) {
@@ -9,21 +11,21 @@ export function createSessionClient(raw, { notify, lock = work => work() }) {
   const started = () => { stopped = false; generation++; notify("auth:started"); };
   const ended = (broadcast = true) => { stopped = true; generation++; notify("auth:ended", { broadcast }); };
   const refresh = () => {
-    if (stopped) return Promise.reject(new Error("Session ended"));
+    if (stopped) return Promise.reject(sessionEnded());
     if (refreshing) return refreshing;
     const run = generation;
     refreshing = lock(async () => {
-      if (stopped || run !== generation) throw new Error("Session ended");
+      if (stopped || run !== generation) throw sessionEnded();
       // Another tab/request may already have refreshed the shared cookies.
       try { await raw.get("/auth/me"); }
       catch (error) {
         if (!refreshable(error)) throw error;
         await raw.post("/auth/refresh");
       }
-      if (stopped || run !== generation) throw new Error("Session ended");
+      if (stopped || run !== generation) throw sessionEnded();
       notify("auth:refreshed");
     }).catch(error => {
-      if (error?.response?.status === 401) ended();
+      if (run === generation && error?.response?.status === 401) ended();
       throw error;
     }).finally(() => { refreshing = null; });
     return refreshing;
@@ -42,14 +44,39 @@ export function createSessionClient(raw, { notify, lock = work => work() }) {
       throw error;
     }
   };
-  return { refresh, logout, started, ended };
+  const authenticate = async (path, body) => {
+    stopped = true;
+    generation++;
+    try {
+      if (refreshing) await refreshing.catch(() => {});
+      return await lock(async () => {
+        const response = await raw.post(path, body);
+        started();
+        return response;
+      });
+    } catch (error) {
+      stopped = false;
+      throw error;
+    }
+  };
+  return { refresh, logout, authenticate, started, ended, generation: () => generation };
 }
 
 export function installSessionInterceptor(api, session) {
-  return api.interceptors.response.use(response => response, async error => {
+  api.interceptors.request?.use(config => {
+    config._sessionGeneration ??= session.generation?.();
+    return config;
+  });
+  const stale = config => config?._sessionGeneration !== undefined &&
+    config._sessionGeneration !== session.generation?.();
+  return api.interceptors.response.use(response => {
+    if (stale(response.config)) throw Object.assign(new Error("Session changed"), { code: "STALE_SESSION" });
+    return response;
+  }, async error => {
     const config = error.config;
-    if (!config || config._retried || /^\/?auth\/(login|register|refresh|logout)(?:$|\?)/.test(config.url || "")) throw error;
-    if (!refreshable(error)) {
+    if (stale(config)) throw Object.assign(new Error("Session changed"), { code: "STALE_SESSION" });
+    if (!config || /^\/?auth\/(login|register|refresh|logout)(?:$|\?)/.test(config.url || "")) throw error;
+    if (config._retried || !refreshable(error)) {
       if (error?.response?.status === 401) session.ended();
       throw error;
     }

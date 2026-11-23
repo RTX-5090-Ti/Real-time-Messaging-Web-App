@@ -1,5 +1,24 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
+.auth-feature-toast {
+  animation: authToastLifetime 3s both;
+}
+.auth-feature-toast-progress {
+  animation: authToastProgress 3s linear both;
+}
+@keyframes authToastLifetime {
+  0% { opacity: 0; transform: translateY(18px) scale(0.96); }
+  10% { opacity: 1; transform: translateY(0) scale(1); }
+  90% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(8px) scale(0.98); }
+}
+@keyframes authToastProgress {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-feature-toast, .auth-feature-toast-progress { animation: none; }
+}
 @keyframes fadeInUp {
   from {
     opacity: 0;
