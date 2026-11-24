@@ -20,7 +20,6 @@ export function useChatSocket({
   const [lastReadByConvo, setLastReadByConvo] = useState({});
 
   const processedMsgIdsRef = useRef(new Set());
-  const didSyncPresenceRef = useRef(false);
 
   const onNotificationNewRef = useRef(onNotificationNew);
   useEffect(() => {
@@ -303,11 +302,8 @@ export function useChatSocket({
         socket.emit("conversation:join", String(cid));
       }
 
-      // Fix StrictMode: xin snapshot online dù socket đã connect từ trước
-      if (!didSyncPresenceRef.current) {
-        didSyncPresenceRef.current = true;
-        socket.emit("presence:sync");
-      }
+      // Request a fresh snapshot on every connection, including reconnects.
+      socket.emit("presence:sync");
     };
 
     const onMessageMutation = (payload = {}) => {
@@ -394,7 +390,6 @@ export function useChatSocket({
       socket.off("conversation:updated", onConversationUpdated);
       socket.off("conversation:removed", onConversationRemoved);
 
-      didSyncPresenceRef.current = false;
     };
   }, [meId, setChats, setMessagesByChatId, setOnlineIds, activeChatIdRef, setFriends, setMe]);
 

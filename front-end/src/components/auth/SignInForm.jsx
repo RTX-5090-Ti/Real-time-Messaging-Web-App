@@ -1,14 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
+import FeatureToast from "../FeatureToast.jsx";
 import GradientButton from "./GradientButton";
 import TextInput from "./TextInput";
 import { AuthAPI } from "../../api/auth.api.js";
 
 export default function SignInForm({ onSignUp, onSuccess }) {
-  const [showForgotToast, setShowForgotToast] = useState(false);
   const [toastVersion, setToastVersion] = useState(0);
-  const toastTimer = useRef(null);
-  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,10 +13,7 @@ export default function SignInForm({ onSignUp, onSuccess }) {
   const [error, setError] = useState("");
 
   const handleForgotPassword = () => {
-    clearTimeout(toastTimer.current);
     setToastVersion(value => value + 1);
-    setShowForgotToast(true);
-    toastTimer.current = setTimeout(() => setShowForgotToast(false), 3000);
   };
 
   const handleSubmit = async (e) => {
@@ -104,19 +98,7 @@ export default function SignInForm({ onSignUp, onSuccess }) {
         </p>
       </form>
 
-      {createPortal(
-        <div className="pointer-events-none fixed inset-x-4 z-[300] flex justify-center" style={{ bottom: "max(24px, env(safe-area-inset-bottom))" }} role="status" aria-live="polite" aria-atomic="true">
-          {showForgotToast && (
-            <div key={toastVersion} className="auth-feature-toast relative w-full max-w-sm overflow-hidden rounded-2xl border border-white/80 bg-white/95 p-4 shadow-[0_12px_40px_-10px_rgba(65,32,115,0.4)] backdrop-blur-xl">
-              <p className="text-center text-sm leading-5 text-[#513a83]">Tính năng này đang được phát triển</p>
-              <div className="absolute inset-x-0 bottom-0 h-[3px] bg-violet-100" aria-hidden="true">
-                <div className="auth-feature-toast-progress h-full origin-left bg-gradient-to-r from-[#b06ab3] to-[#4568dc]" />
-              </div>
-            </div>
-          )}
-        </div>,
-        document.body,
-      )}
+      {toastVersion > 0 && <FeatureToast key={toastVersion} />}
     </div>
   );
 }

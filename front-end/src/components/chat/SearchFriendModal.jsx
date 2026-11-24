@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { socket } from "../../socket/socket.js";
 
 export default function SearchFriendModal({
   open,
   onClose,
   onSearchEmail, // async (email) => { user, relationship, incomingRequestId, outgoingRequestId }
   onSendRequest, // async (toUserId) => void
+  onCancelRequest,
   onAccept, // async (requestId) => void
   onReject, // async (requestId) => void
 }) {
@@ -14,6 +16,17 @@ export default function SearchFriendModal({
   const [err, setErr] = useState("");
 
   const [result, setResult] = useState(null); // { user, relationship, incomingRequestId, outgoingRequestId }
+  useEffect(() => {
+    if (!open || !result?.user?.email) return;
+    let active = true;
+    const sync = payload => {
+      if (payload && ![payload.fromUserId, payload.toUserId].includes(String(result.user.id))) return;
+      onSearchEmail(result.user.email).then(data => { if (active) setResult(data); }).catch(() => {});
+    };
+    socket.on("friend:request-updated", sync);
+    socket.on("connect", sync);
+    return () => { active = false; socket.off("friend:request-updated", sync); socket.off("connect", sync); };
+  }, [open, result?.user?.email, result?.user?.id, onSearchEmail]);
 
   useEffect(() => {
     if (!open) return;
@@ -66,10 +79,10 @@ export default function SearchFriendModal({
     setErr("");
     setLoading(true);
     try {
-      await onSendRequest(result.user.id);
+      const request = await onSendRequest(result.user.id);
       // update UI locally
       setResult((prev) =>
-        prev ? { ...prev, relationship: "outgoing_pending" } : prev
+        prev ? { ...prev, relationship: "outgoing_pending", outgoingRequestId: String(request.id) } : prev
       );
     } catch (e) {
       setErr(e?.message || "Failed to send request");
@@ -87,10 +100,23 @@ export default function SearchFriendModal({
       await onAccept(reqId);
       setResult((prev) => (prev ? { ...prev, relationship: "friends" } : prev));
     } catch (e) {
-      setErr(e?.message || "Failed to accept");
+      setErr(e?.response?.data?.message || e?.message || "Failed to accept");
+      onSearchEmail(result.user.email).then(setResult).catch(() => {});
     } finally {
       setLoading(false);
     }
+  };
+
+  const onCancelClick = async () => {
+    if (!result?.outgoingRequestId || loading) return;
+    setErr(""); setLoading(true);
+    try {
+      await onCancelRequest(result.outgoingRequestId);
+      setResult(prev => prev ? { ...prev, relationship: "none", outgoingRequestId: null } : prev);
+    } catch (error) {
+      setErr(error?.response?.data?.message || "Không thể hủy lời mời");
+      onSearchEmail(result.user.email).then(setResult).catch(() => {});
+    } finally { setLoading(false); }
   };
 
   const onRejectClick = async () => {
@@ -208,11 +234,12 @@ export default function SearchFriendModal({
                     </span>
                   ) : relationship === "outgoing_pending" ? (
                     <button
-                      disabled
-                      className="h-10 px-4 text-sm font-semibold cursor-not-allowed rounded-2xl bg-zinc-200 text-zinc-600"
+                      disabled={loading}
+                      onClick={onCancelClick}
+                      className="h-10 px-4 text-sm font-semibold rounded-2xl bg-zinc-100 text-zinc-700 hover:bg-zinc-200 disabled:opacity-50 cursor-pointer"
                       type="button"
                     >
-                      Pending…
+                      Hủy lời mời
                     </button>
                   ) : relationship === "incoming_pending" ? (
                     <>

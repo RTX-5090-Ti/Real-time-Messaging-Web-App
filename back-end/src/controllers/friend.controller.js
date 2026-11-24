@@ -143,6 +143,7 @@ export async function sendFriendRequest(req, res) {
 export async function acceptFriendRequest(req, res) {
   const meId = req.user.id;
   const { id } = req.params;
+  if (!mongoose.isObjectIdOrHexString(id)) return res.status(400).json({ message: "Invalid request id" });
 
   const session = await mongoose.startSession();
   try {
@@ -190,6 +191,7 @@ export async function acceptFriendRequest(req, res) {
 
     emitToUser(request.fromUserId, "friend:updated", { friend: safeUser(me) });
     emitToUser(meId, "friend:updated", { friend: safeUser(fromUser) });
+    emitRequestUpdate(request);
 
     return res.json({
       message: "Đã chấp nhận lời mời",
@@ -201,7 +203,7 @@ export async function acceptFriendRequest(req, res) {
     if (String(e.message) === "FORBIDDEN")
       return res.status(403).json({ message: "Không có quyền" });
     if (String(e.message) === "NOT_PENDING")
-      return res.status(400).json({ message: "Request không còn pending" });
+      return res.status(409).json({ message: "Lời mời đã được thu hồi hoặc xử lý", code: "REQUEST_NOT_PENDING" });
 
     return res.status(500).json({ message: "Server error" });
   } finally {
@@ -229,8 +231,9 @@ export async function rejectFriendRequest(req, res) {
     return res.status(409).json({ message: "Request không còn pending" });
   }
 
-  request.status = "rejected";
-  await request.save();
+  const updated = await FriendRequest.findOneAndUpdate({ _id: id, status: "pending" }, { $set: { status: "rejected" } }, { new: true });
+  if (!updated) return res.status(409).json({ message: "Lời mời đã được thu hồi hoặc xử lý", code: "REQUEST_NOT_PENDING" });
+  emitRequestUpdate(updated);
 
   const me = await User.findById(meId).select("_id name email avatar");
   //  notify người gửi (và người reject cũng nhận để UI update)
@@ -254,4 +257,30 @@ export async function rejectFriendRequest(req, res) {
   // });
 
   return res.json({ message: "Đã từ chối lời mời" });
+}
+
+function emitRequestUpdate(request) {
+  const payload = { requestId: String(request._id), fromUserId: String(request.fromUserId), toUserId: String(request.toUserId), status: request.status };
+  for (const userId of [request.fromUserId, request.toUserId]) emitToUser(userId, "friend:request-updated", payload);
+}
+
+export async function cancelFriendRequest(req, res) {
+  const { id } = req.params;
+  if (!mongoose.isObjectIdOrHexString(id)) return res.status(400).json({ message: "Invalid request id" });
+  const request = await FriendRequest.findOneAndUpdate(
+    { _id: id, fromUserId: req.user.id, status: "pending" },
+    { $set: { status: "canceled" } }, { new: true },
+  );
+  if (!request) {
+    const existing = await FriendRequest.findById(id);
+    if (!existing) return res.status(404).json({ message: "Request không tồn tại" });
+    if (String(existing.fromUserId) !== String(req.user.id)) return res.status(403).json({ message: "Không có quyền" });
+    if (existing.status !== "canceled") return res.status(409).json({ message: "Lời mời đã được xử lý", code: "REQUEST_NOT_PENDING" });
+    emitRequestUpdate(existing);
+    return res.json({ ok: true });
+  }
+  // Pending invitations are loaded from FriendRequest; also remove any legacy persisted notification.
+  await Notification.deleteMany({ userId: request.toUserId, type: "friend_request", "data.requestId": { $in: [request._id, String(request._id)] } });
+  emitRequestUpdate(request);
+  return res.json({ ok: true });
 }

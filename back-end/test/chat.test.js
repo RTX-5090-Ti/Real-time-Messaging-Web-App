@@ -23,6 +23,11 @@ import { createTypingTracker } from "../src/sockets/typing.js";
 import { markConversationRead } from "../src/services/read.service.js";
 import { listConversationSummaries } from "../src/services/conversationList.service.js";
 import { changeGroup } from "../src/services/group.service.js";
+import { createOrGetDirect, deleteConversationForMe } from "../src/controllers/conversation.controller.js";
+import { mapConversationsToChats } from "../../front-end/src/utils/chat/chatMappers.js";
+import FriendRequest from "../src/models/FriendRequest.js";
+import Notification from "../src/models/Notification.js";
+import { sendFriendRequest, cancelFriendRequest, acceptFriendRequest, listIncomingRequests } from "../src/controllers/friend.controller.js";
 
 const cid = "a".repeat(24);
 const valid = { conversationId: cid, clientId: "retry-1", text: "hello" };
@@ -136,11 +141,39 @@ test("database integration in an isolated temporary database", { skip: process.e
   setIO({ to(room) { return { emit(event, payload) { events.push({ room, event, payload }); } }; },
     in(room) { return { socketsLeave(cid) { evictions.push({ room, cid }); } }; } });
   try {
-    await Promise.all([User, Conversation, Message, Upload].map(m => m.createIndexes()));
+    await Promise.all([User, Conversation, Message, Upload, FriendRequest, Notification].map(m => m.createIndexes()));
     const [a, b, stranger] = await User.create(["a", "b", "stranger"].map(name => ({ name, email: `${name}@test.invalid`, passwordHash: "test-only" })));
     const group = await Conversation.create({ type: "group", members: [a._id, b._id], participants: [{ userId: a._id }, { userId: b._id }] });
     const input = { ...valid, conversationId: String(group._id) };
 
+    await t.test("cancel invitation removes recipient action, permits resend and cannot undo acceptance", async () => {
+      const [sender, recipient, outsider] = await User.create(["sender", "recipient", "outsider"].map(name => ({ name, email: `${name}@cancel.test`, passwordHash: "test-only" })));
+      const send = async () => { const res = response(); await sendFriendRequest({ user: { id: String(sender._id) }, body: { toUserId: String(recipient._id) } }, res); return res.body.request.id; };
+      const cancel = async (id, actor = sender) => { const res = response(); await cancelFriendRequest({ user: { id: String(actor._id) }, params: { id: String(id) } }, res); return res; };
+      const accept = async id => { const res = response(); await acceptFriendRequest({ user: { id: String(recipient._id) }, params: { id: String(id) } }, res); return res; };
+      const first = await send();
+      await cancel(first, outsider);
+      assert.equal((await FriendRequest.findById(first)).status, "pending");
+      await Notification.create({ userId: recipient._id, type: "friend_request", data: { requestId: String(first) } });
+      await cancel(first);
+      assert.equal((await FriendRequest.findById(first)).status, "canceled");
+      assert.equal(await Notification.countDocuments({ userId: recipient._id }), 0);
+      assert.ok(events.some(e => e.room === `user:${recipient._id}` && e.event === "friend:request-updated" && e.payload.requestId === String(first)));
+      const incoming = response();
+      await listIncomingRequests({ user: { id: String(recipient._id) }, query: {} }, incoming);
+      assert.equal(incoming.body.requests.length, 0);
+      await accept(first);
+      assert.equal((await User.findById(sender._id)).friends.length, 0);
+      const second = await send();
+      assert.notEqual(String(second), String(first));
+      await Promise.all([accept(second), cancel(second)]);
+      const state = (await FriendRequest.findById(second)).status;
+      const linked = (await User.findById(sender._id)).friends.some(id => String(id) === String(recipient._id));
+      assert.equal(linked, state === "accepted");
+      if (state === "canceled") { const third = await send(); await accept(third); await cancel(third); }
+      else await cancel(second);
+      assert.ok((await User.findById(sender._id)).friends.some(id => String(id) === String(recipient._id)));
+    });
     await t.test("multiple groups allowed; direct key remains unique", async () => {
       await Conversation.create({ type: "group", members: [a._id, b._id] });
       await Conversation.create({ type: "direct", directKey: "a_b", members: [a._id, b._id] });
@@ -216,6 +249,50 @@ test("database integration in an isolated temporary database", { skip: process.e
       assert.equal((await Message.findById(message.id)).reactions.length, 2);
       await Promise.all(Array.from({ length: 2 }, () => mutateChatMessage(String(a._id), "react", { messageId: message.id, emoji: "👍" })));
       assert.equal((await Message.findById(message.id)).reactions.length, 2);
+    });
+    await t.test("reopened direct chat leads only the caller's list until a newer message arrives", async () => {
+      const [owner, peer, friend] = await User.create(["owner", "peer", "friend"].map(name => ({ name, email: `${name}@reopen.test`, passwordHash: "test-only" })));
+      const uid = String(owner._id);
+      const open = () => createOrGetDirect({ user: { id: uid }, body: { otherUserId: String(peer._id) } }, response());
+      const target = await Conversation.create({ type: "direct", directKey: [uid, String(peer._id)].sort().join("_"), members: [owner._id, peer._id], lastMessageAt: new Date("2020-01-01"), participants: [{ userId: owner._id }, { userId: peer._id }] });
+      const newer = await Conversation.create({ members: [owner._id, friend._id], lastMessageAt: new Date("2021-01-01") });
+      await Message.create({ conversationId: target._id, senderId: peer._id, text: "old", createdAt: new Date("2020-01-01") });
+      await deleteConversationForMe({ user: { id: uid }, params: { id: String(target._id) } }, response());
+      await Conversation.updateOne({ _id: target._id }, { $addToSet: { hiddenFor: peer._id } });
+      await Promise.all([open(), open()]);
+      const saved = await Conversation.findById(target._id);
+      const reopenedAt = saved.participants.find(p => String(p.userId) === uid).reopenedAt;
+      assert.ok(reopenedAt);
+      assert.equal(saved.lastMessageAt.toISOString(), "2020-01-01T00:00:00.000Z");
+      assert.ok(saved.hiddenFor.some(id => String(id) === String(peer._id)));
+      assert.equal(saved.participants.find(p => String(p.userId) === String(peer._id)).reopenedAt, null);
+      const summaries = await listConversationSummaries(uid);
+      assert.equal(summaries[0].id, String(target._id));
+      assert.equal(summaries[0].lastMessage, null);
+      const mapped = mapConversationsToChats({ convos: summaries, meId: uid, onlineIdsSet: new Set(), avatarFromName: () => "", formatTimeOrDate: () => "" });
+      assert.equal(mapped[0].id, String(target._id));
+      await open();
+      assert.equal((await Conversation.findById(target._id)).participants.find(p => String(p.userId) === uid).reopenedAt.getTime(), reopenedAt.getTime());
+      await sendChatMessage(String(friend._id), { conversationId: String(newer._id), clientId: "after-reopen", text: "new message" });
+      assert.equal((await listConversationSummaries(uid))[0].id, String(newer._id));
+      assert.equal((await listConversationSummaries(String(peer._id))).some(c => c.id === String(target._id)), false);
+    });
+    await t.test("legacy conversations without admins or participants still load", async () => {
+      // Bypass schema defaults to reproduce existing MongoDB documents.
+      const docs = [
+        { _id: new mongoose.Types.ObjectId(), type: "direct", members: [a._id, b._id], createdAt: new Date("2022-01-01") },
+        { _id: new mongoose.Types.ObjectId(), type: "group", members: [a._id], admins: null, participants: null, createdAt: new Date("2022-01-02") },
+      ];
+      await Conversation.collection.insertMany(docs);
+      const summaries = await listConversationSummaries(String(a._id));
+      for (const doc of docs) {
+        const summary = summaries.find(c => c.id === String(doc._id));
+        assert.ok(summary);
+        assert.deepEqual(summary.adminIds, []);
+        assert.equal(summary.members.length, doc.members.length);
+        assert.equal(summary.unread, 0);
+      }
+      assert.equal((await Conversation.collection.findOne({ _id: docs[0]._id })).admins, undefined);
     });
     await t.test("summary sorting ignores read/profile updates and unread respects clear time", async () => {
       const old = await Conversation.create({ type: "group", members: [a._id], lastMessageAt: new Date("2020-01-01"), participants: [{ userId: a._id, clearedAt: new Date("2020-01-02") }] });

@@ -9,6 +9,7 @@ const participantSchema = new mongoose.Schema(
     },
     lastReadAt: { type: Date, default: null },
     clearedAt: { type: Date, default: null },
+    reopenedAt: { type: Date, default: null },
     unreadExtra: { type: Number, default: 0 },
   },
   { _id: false },

@@ -44,6 +44,7 @@ export const ChatAPI = {
   listIncomingRequests: (status = "pending") =>
     api.get("/friends/requests/incoming", { params: { status } }),
   sendFriendRequest: (toUserId) => api.post("/friends/requests", { toUserId }),
+  cancelRequest: (requestId) => api.post(`/friends/requests/${requestId}/cancel`),
   acceptRequest: (requestId) =>
     api.post(`/friends/requests/${requestId}/accept`),
   rejectRequest: (requestId) =>

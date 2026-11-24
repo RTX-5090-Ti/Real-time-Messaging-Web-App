@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChatAPI } from "../../api/chat.api.js";
+import { socket } from "../../socket/socket.js";
 import {
   countUnread,
   keyOfNoti,
@@ -14,6 +15,8 @@ export function useNotifications({ me, onlineSet, setFriends }) {
   const [notiCount, setNotiCount] = useState(0);
 
   const notiOpenRef = useRef(false);
+  const incomingVersion = useRef(0);
+  const cachedReads = useRef(new Map());
 
   useEffect(() => {
     notiOpenRef.current = notiOpen;
@@ -44,7 +47,9 @@ export function useNotifications({ me, onlineSet, setFriends }) {
   };
 
   const loadIncomingRequests = async () => {
+    const version = ++incomingVersion.current;
     const { data } = await ChatAPI.listIncomingRequests("pending");
+    if (version !== incomingVersion.current) return;
 
     const reqItems = (data.requests || [])
       .filter((r) => r?.from)
@@ -74,7 +79,7 @@ export function useNotifications({ me, onlineSet, setFriends }) {
 
       const merged = mergedRaw.map((n) => ({
         ...n,
-        readAt: prevMap.get(keyOfNoti(n))?.readAt ?? null,
+        readAt: prevMap.get(keyOfNoti(n))?.readAt ?? cachedReads.current.get(keyOfNoti(n)) ?? null,
       }));
 
       setNotiCount(notiOpenRef.current ? 0 : countUnread(merged));
@@ -141,7 +146,8 @@ export function useNotifications({ me, onlineSet, setFriends }) {
     );
     const fromUser = req?.from || null;
 
-    await ChatAPI.acceptRequest(requestId);
+    try { await ChatAPI.acceptRequest(requestId); }
+    catch (error) { await loadIncomingRequests().catch(() => {}); throw error; }
     pushSelfFriendActionNoti(requestId, fromUser, "accepted");
 
     await Promise.all([loadFriends(), loadIncomingRequests()]);
@@ -155,15 +161,18 @@ export function useNotifications({ me, onlineSet, setFriends }) {
     );
     const fromUser = req?.from || null;
 
-    await ChatAPI.rejectRequest(requestId);
+    try { await ChatAPI.rejectRequest(requestId); }
+    catch (error) { await loadIncomingRequests().catch(() => {}); throw error; }
     pushSelfFriendActionNoti(requestId, fromUser, "rejected");
 
     await loadIncomingRequests();
   };
 
   const sendFriendRequest = async (toUserId) => {
-    await ChatAPI.sendFriendRequest(toUserId);
+    const { data } = await ChatAPI.sendFriendRequest(toUserId);
+    return data.request;
   };
+  const cancelRequest = requestId => ChatAPI.cancelRequest(requestId);
 
   const searchUserByEmail = async (email) => {
     try {
@@ -199,6 +208,10 @@ export function useNotifications({ me, onlineSet, setFriends }) {
   const onNotificationNew = (payload) => {
     const type = payload?.type;
     if (!type) return;
+    if (type === "friend_request") {
+      loadIncomingRequests().catch(() => {});
+      return;
+    }
 
     const data = payload?.data || null;
 
@@ -247,11 +260,37 @@ export function useNotifications({ me, onlineSet, setFriends }) {
     if (!me?.id) return;
 
     const cached = loadNotiFromLS(me.id);
-    setNotiItems(cached);
-    setNotiCount(notiOpenRef.current ? 0 : countUnread(cached));
+    cachedReads.current = new Map(cached.map(item => [keyOfNoti(item), item.readAt]));
+    const history = cached.filter(item => item.type !== "friend_request");
+    setNotiItems(history);
+    setNotiCount(notiOpenRef.current ? 0 : countUnread(history));
 
     loadFriends().catch(() => {});
     loadIncomingRequests().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.id]);
+
+  useEffect(() => {
+    if (!me?.id) return;
+    const sync = () => { loadIncomingRequests().catch(() => {}); loadFriends().catch(() => {}); };
+    const onChanged = ({ requestId }) => {
+      incomingVersion.current++;
+      setNotiItems(prev => {
+        const next = prev.filter(item => item.type !== "friend_request" || String(item.requestId) !== String(requestId));
+        setNotiCount(notiOpenRef.current ? 0 : countUnread(next));
+        return next;
+      });
+      sync();
+    };
+    socket.on("friend:request-updated", onChanged);
+    socket.on("connect", sync);
+    return () => {
+      // This is a request generation counter, not a DOM ref.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      incomingVersion.current++;
+      socket.off("friend:request-updated", onChanged);
+      socket.off("connect", sync);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.id]);
 
@@ -268,6 +307,7 @@ export function useNotifications({ me, onlineSet, setFriends }) {
       acceptRequest,
       rejectRequest,
       sendFriendRequest,
+      cancelRequest,
       searchUserByEmail,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -288,8 +328,11 @@ export function useNotifications({ me, onlineSet, setFriends }) {
     ...api,
 
     clearAll: () => {
-      setNotiItems([]);
-      setNotiCount(0);
+      setNotiItems(prev => {
+        const pending = prev.filter(item => item.type === "friend_request");
+        setNotiCount(notiOpenRef.current ? 0 : countUnread(pending));
+        return pending;
+      });
     },
   };
 }

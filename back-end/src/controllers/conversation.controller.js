@@ -56,21 +56,26 @@ export async function createOrGetDirect(req, res) {
   }
 
   // nếu trước đó user đã "delete chat" thì tạo/get direct sẽ hiện lại
-  try {
-    await Conversation.updateOne(
-      { _id: convo._id },
-      {
-        $pull: {
-          hiddenFor: {
-            $in: [
-              new mongoose.Types.ObjectId(myId),
-              new mongoose.Types.ObjectId(otherUserId),
-            ],
-          },
-        },
-      },
-    );
-  } catch (e) {}
+  // Restore only the caller. The hiddenFor condition makes retries idempotent.
+  const uid = new mongoose.Types.ObjectId(myId);
+  const restored = await Conversation.updateOne(
+    { _id: convo._id, hiddenFor: uid },
+    [{ $set: {
+      hiddenFor: { $filter: { input: "$hiddenFor", as: "id", cond: { $ne: ["$$id", uid] } } },
+      participants: { $cond: [
+        { $in: [uid, { $ifNull: ["$participants.userId", []] }] },
+        { $map: { input: "$participants", as: "p", in: { $cond: [
+          { $eq: ["$$p.userId", uid] },
+          { $mergeObjects: ["$$p", { reopenedAt: now }] }, "$$p",
+        ] } } },
+        { $concatArrays: [{ $ifNull: ["$participants", []] }, [{ userId: uid, reopenedAt: now }]] },
+      ] },
+    } }],
+    { updatePipeline: true },
+  );
+  if (restored.modifiedCount) {
+    getIO()?.to(`user:${myId}`).emit("conversation:updated", { conversationId: String(convo._id) });
+  }
 
   return res.status(201).json({
     conversation: {

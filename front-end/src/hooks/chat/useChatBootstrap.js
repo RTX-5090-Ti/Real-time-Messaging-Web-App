@@ -20,7 +20,7 @@ export function useChatBootstrap({ navigate }) {
   };
 
   const [chats, setChats] = useState([]);
-  const [friends, setFriends] = useState([]);
+  const [friendProfiles, setFriends] = useState([]);
   const [activeChatId, setActiveChatId] = useState(null);
   const [messagesByChatId, setMessagesByChatId] = useState({});
 
@@ -28,26 +28,11 @@ export function useChatBootstrap({ navigate }) {
   const [onlineIds, setOnlineIds] = useState([]);
   const onlineSet = useMemo(() => new Set(onlineIds.map(String)), [onlineIds]);
 
-  //  Sync friend status with live presence (avoid needing F5)
-  useEffect(() => {
-    setFriends((prev) => {
-      let changed = false;
-
-      const next = (prev || []).map((f) => {
-        const nextStatus = onlineSet.has(String(f.id)) ? "online" : "offline";
-
-        if (f?.status && f.status !== "online" && f.status !== "offline")
-          return f;
-
-        if (f.status === nextStatus) return f;
-
-        changed = true;
-        return { ...f, status: nextStatus };
-      });
-
-      return changed ? next : prev;
-    });
-  }, [onlineSet]);
+  // Presence is derived, never copied from a possibly stale HTTP response.
+  const friends = useMemo(() => friendProfiles.map(friend => ({
+    ...friend,
+    status: onlineSet.has(String(friend.id)) ? "online" : "offline",
+  })), [friendProfiles, onlineSet]);
 
   const onlineIdsRef = useRef([]);
   useEffect(() => {

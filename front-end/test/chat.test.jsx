@@ -6,6 +6,7 @@ import ChatPage from "../src/pages/ChatPage.jsx";
 import { useChatHistory } from "../src/hooks/chat/useChatHistory.js";
 import { useVisibleRead } from "../src/hooks/chat/useVisibleRead.js";
 import { useChatBootstrap } from "../src/hooks/chat/useChatBootstrap.js";
+import { useNotifications } from "../src/hooks/chat/useNotifications.js";
 import { mapMessage, mergeMessages } from "../src/utils/chat/messageState.js";
 
 const mocks = vi.hoisted(() => {
@@ -60,6 +61,34 @@ function useHistoryHarness(activeChatId = cid) {
 }
 
 describe("chat page after login", () => {
+  it("keeps live presence when delayed friend loads overwrite profile data", async () => {
+    const pending = deferred();
+    const normal = mocks.get.getMockImplementation();
+    mocks.get.mockImplementation(path => path === "/friends" ? pending.promise : normal(path));
+    const { result } = renderHook(() => {
+      const state = useChatBootstrap({ navigate: vi.fn() });
+      useNotifications({ me: state.me, onlineSet: state.onlineSet, setFriends: state.setFriends });
+      return state;
+    });
+    await waitFor(() => expect(mocks.get.mock.calls.filter(([path]) => path === "/friends").length).toBeGreaterThanOrEqual(2));
+    act(() => result.current.setOnlineIds([friend.id]));
+    await act(async () => pending.resolve({ data: { friends: [friend] } }));
+    expect(result.current.friends[0].status).toBe("online");
+    // An HTTP refresh cannot resurrect an offline friend either.
+    act(() => result.current.setOnlineIds([]));
+    act(() => result.current.setFriends([{ ...friend, status: "online" }]));
+    expect(result.current.friends[0].status).toBe("offline");
+    act(() => result.current.setOnlineIds([friend.id]));
+    expect(result.current.friends[0].status).toBe("online");
+  });
+
+  it("requests an online snapshot on every socket reconnect", async () => {
+    render(<MemoryRouter><ChatPage /></MemoryRouter>);
+    await screen.findByText("History message");
+    mocks.socket.emit.mockClear();
+    act(() => { mocks.dispatch("connect"); mocks.dispatch("connect"); });
+    expect(mocks.socket.emit.mock.calls.filter(([event]) => event === "presence:sync")).toHaveLength(2);
+  });
   it.each(["/auth/me", "/friends"])("keeps network/server failure at %s out of login and allows retry", async path => {
     const normal = mocks.get.getMockImplementation();
     let fail = true;

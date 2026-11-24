@@ -30,6 +30,15 @@ export default function NotificationsDropdown({
   onClearAll,
 }) {
   const [visibleCount, setVisibleCount] = useState(STEP);
+  const [actionError, setActionError] = useState("");
+  const [busy, setBusy] = useState(null);
+  const respond = async (id, handler) => {
+    if (busy) return;
+    setBusy(id); setActionError("");
+    try { await handler?.(id); }
+    catch (error) { setActionError(error?.response?.data?.message || "Không thể xử lý lời mời. Vui lòng thử lại."); }
+    finally { setBusy(null); }
+  };
 
   const total = items.length;
   const canLoadMore = visibleCount < total;
@@ -59,6 +68,7 @@ export default function NotificationsDropdown({
         </div>
 
         <div className="max-h-[360px] overflow-y-auto">
+          {actionError && <p role="alert" className="px-4 py-2 text-sm text-red-600">{actionError}</p>}
           {total === 0 ? (
             <div className="p-4 text-sm text-zinc-500">No notifications.</div>
           ) : (
@@ -134,14 +144,16 @@ export default function NotificationsDropdown({
                         {isReq ? (
                           <div className="flex items-center gap-2 mt-3">
                             <button
-                              onClick={() => onReject?.(reqId)}
+                              onClick={() => respond(reqId, onReject)}
+                              disabled={!!busy}
                               className="px-3 text-sm font-semibold transition h-9 rounded-xl bg-zinc-100 text-zinc-900 hover:bg-zinc-200"
                               type="button"
                             >
                               Reject
                             </button>
                             <button
-                              onClick={() => onAccept?.(reqId)}
+                              onClick={() => respond(reqId, onAccept)}
+                              disabled={!!busy}
                               className="px-3 text-sm font-semibold text-white transition h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700"
                               type="button"
                             >
@@ -181,6 +193,7 @@ export default function NotificationsDropdown({
 
           <div className="mt-2 text-xs text-zinc-400">
             Showing {Math.min(visibleCount, total)} of {total}
+            {items.some(item => item.type === "friend_request") && <p>Clear all giữ lại lời mời chưa xử lý.</p>}
           </div>
         </div>
       </div>

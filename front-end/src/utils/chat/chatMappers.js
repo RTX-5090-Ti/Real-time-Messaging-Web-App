@@ -8,6 +8,7 @@ export function mapConversationsToChats({
 }) {
   const getTs = (c) => {
     const x =
+      c?.activityAt ??
       c?.lastMessage?.createdAt ??
       c?.lastMessageAt ??
       c?.createdAt ??

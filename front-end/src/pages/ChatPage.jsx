@@ -10,6 +10,7 @@ import SearchFriendModal from "../components/chat/SearchFriendModal.jsx";
 import { socket } from "../socket/socket.js";
 import { AuthAPI } from "../api/auth.api.js";
 import SessionStatus from "../components/auth/SessionStatus.jsx";
+import FeatureToast from "../components/FeatureToast.jsx";
 import { ChatAPI } from "../api/chat.api.js";
 
 import { avatarFromName, formatTime } from "../utils/chatUi.js";
@@ -28,6 +29,7 @@ import UserProfileModal from "../components/chat/UserProfileModal.jsx";
 import CreateGroupModal from "../components/chat/CreateGroupModal.jsx";
 
 export default function ChatPage() {
+  const [reportToastVersion, setReportToastVersion] = useState(0);
   const navigate = useNavigate();
   useEffect(() => {
     const onSessionEnded = () => navigate("/auth", { replace: true });
@@ -1071,6 +1073,7 @@ export default function ChatPage() {
 
   return (
     <div className="w-full h-[100svh] p-0 sm:p-4 bg-gradient-to-r from-[#b06ab3] to-[#4568dc]">
+      {reportToastVersion > 0 && <FeatureToast key={reportToastVersion} />}
       <div className="h-full w-full sm:rounded-[28px] overflow-hidden sm:shadow-xl bg-white flex min-h-0">
         {/* Sidebar */}
         <div
@@ -1135,7 +1138,7 @@ export default function ChatPage() {
 
               openOtherProfile(otherId, seed);
             }}
-            onReport={(chat) => console.log("Report chat", chat)}
+            onReport={() => setReportToastVersion(value => value + 1)}
           />
         </div>
 
@@ -1264,6 +1267,7 @@ export default function ChatPage() {
           onPick={onPickAddMember}
           onSearchEmail={noti.searchUserByEmail}
           onSendRequest={noti.sendFriendRequest}
+          onCancelRequest={noti.cancelRequest}
           onAccept={noti.acceptRequest}
           onReject={noti.rejectRequest}
         />

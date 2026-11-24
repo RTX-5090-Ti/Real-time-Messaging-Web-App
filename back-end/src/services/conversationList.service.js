@@ -9,8 +9,9 @@ export async function listConversationSummaries(userId) {
   // lookup starts with conversationId and uses the message history indexes.
   const rows = await Conversation.aggregate([
     { $match: { members: uid, hiddenFor: { $ne: uid } } },
-    { $set: { myParticipant: { $arrayElemAt: [{ $filter: { input: "$participants", as: "p", cond: { $eq: ["$$p.userId", uid] } } }, 0] },
+    { $set: { myParticipant: { $arrayElemAt: [{ $filter: { input: { $ifNull: ["$participants", []] }, as: "p", cond: { $eq: ["$$p.userId", uid] } } }, 0] },
       activityAt: { $ifNull: ["$lastMessageAt", "$createdAt"] } } },
+    { $set: { activityAt: { $max: ["$activityAt", { $ifNull: ["$myParticipant.reopenedAt", epoch] }] } } },
     { $sort: { activityAt: -1, _id: -1 } },
     { $lookup: { from: "messages", let: { cid: "$_id", cleared: { $ifNull: ["$myParticipant.clearedAt", epoch] } }, pipeline: [
       { $match: { $expr: { $and: [{ $eq: ["$conversationId", "$$cid"] }, { $gt: ["$createdAt", "$$cleared"] }] } } },
@@ -33,9 +34,9 @@ export async function listConversationSummaries(userId) {
   const users = await User.find({ _id: { $in: ids } }).select("name email role avatar").lean();
   const byId = new Map(users.map(u => [String(u._id), { id: String(u._id), name: u.name, email: u.email, role: u.role, avatarUrl: u.avatar?.url || null }]));
   return rows.map(c => ({ id: String(c._id), type: c.type, name: c.name, avatarUrl: c.avatar?.url || null,
-    members: c.members.map(m => byId.get(String(m))).filter(Boolean), adminIds: c.admins.map(String),
+    members: c.members.map(m => byId.get(String(m))).filter(Boolean), adminIds: (c.admins ?? []).map(String),
     createdBy: c.createdBy ? String(c.createdBy) : null, createdAt: c.createdAt, updatedAt: c.updatedAt,
-    lastMessageAt: c.lastMessageAt, unread: c.unread,
+    lastMessageAt: c.lastMessageAt, activityAt: c.activityAt, unread: c.unread,
     lastMessage: c.lastMessage ? { ...c.lastMessage, id: String(c.lastMessage._id), sender: byId.get(String(c.lastMessage.senderId)) || null } : null,
   }));
 }
