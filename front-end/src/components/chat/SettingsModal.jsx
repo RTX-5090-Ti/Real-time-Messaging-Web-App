@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import ProfileModal from "./ProfileModal.jsx";
+import SecuritySettings from "./SecuritySettings.jsx";
 
 const sections = [
   { id: "theme", label: "Theme" },
   { id: "profile", label: "Profile" },
+  { id: "security", label: "Đăng nhập và bảo mật" },
 ];
 const themes = [
   { id: "light", label: "Light", description: "Sáng và rõ ràng" },
@@ -59,7 +61,7 @@ export default function SettingsModal({ onClose, themeMode, setThemeMode, me, se
                 <span className="block text-sm font-semibold">{mode.label}</span><span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{mode.description}</span>
               </label>)}</div>
               <p className="mt-5 text-xs text-zinc-500 dark:text-zinc-400">Thay đổi được áp dụng ngay và lưu trên trình duyệt này.</p>
-            </fieldset> : <ProfileModal open embedded me={me} setMe={setMe} />}
+            </fieldset> : section === "profile" ? <ProfileModal open embedded me={me} setMe={setMe} /> : <SecuritySettings />}
           </section>
         </div>
       </div>
