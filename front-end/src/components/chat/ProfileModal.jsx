@@ -25,7 +25,7 @@ const buildDob = ({ day, month, year }) => {
   return `${yy}-${mm}-${dd}`;
 };
 
-export default function ProfileModal({ open, onClose, me, setMe }) {
+export default function ProfileModal({ open, onClose, me, setMe, embedded = false }) {
   const [screen, setScreen] = useState("view"); // view | edit
   const [busy, setBusy] = useState(false);
 
@@ -45,11 +45,11 @@ export default function ProfileModal({ open, onClose, me, setMe }) {
   }, [open, me?.name, me?.gender, me?.dob]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || embedded) return;
     const onEsc = (e) => e.key === "Escape" && onClose?.();
     document.addEventListener("keydown", onEsc);
     return () => document.removeEventListener("keydown", onEsc);
-  }, [open, onClose]);
+  }, [open, onClose, embedded]);
 
   const coverUrl = useMemo(() => {
     const seed = encodeURIComponent(String(me?.id || 1));
@@ -145,16 +145,16 @@ export default function ProfileModal({ open, onClose, me, setMe }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[120]">
+    <div className={embedded ? "settings-profile" : "fixed inset-0 z-[120]"}>
       {/* overlay */}
       <div
-        className="absolute inset-0 bg-black/40"
+        className={embedded ? "hidden" : "absolute inset-0 bg-black/40"}
         onClick={() => !busy && onClose?.()}
       />
 
       {/* modal */}
-      <div className="absolute inset-0 grid p-4 place-items-center">
-        <div className="w-full max-w-[520px] rounded-2xl overflow-hidden bg-white text-zinc-900 shadow-2xl ring-1 ring-zinc-200">
+      <div className={embedded ? "" : "absolute inset-0 grid p-4 place-items-center"}>
+        <div className={embedded ? "overflow-hidden rounded-2xl bg-white text-zinc-900" : "w-full max-w-[520px] rounded-2xl overflow-hidden bg-white text-zinc-900 shadow-2xl ring-1 ring-zinc-200"}>
           {/* header */}
           <div className="flex items-center justify-between px-4 py-3 border-b bg-white/95 border-zinc-200">
             <div className="flex items-center gap-2">
@@ -188,6 +188,8 @@ export default function ProfileModal({ open, onClose, me, setMe }) {
               type="button"
               className="grid cursor-pointer w-9 h-9 place-items-center rounded-xl hover:bg-zinc-100"
               onClick={() => !busy && onClose?.()}
+              hidden={embedded}
+              style={embedded ? { display: "none" } : undefined}
               title="Close"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -400,60 +402,34 @@ export default function ProfileModal({ open, onClose, me, setMe }) {
                       Date of birth
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3">
-                      <select
-                        value={dob.day}
-                        onChange={(e) =>
-                          setDob((p) => ({ ...p, day: e.target.value }))
-                        }
-                        className="px-3 bg-white border outline-none h-11 rounded-2xl border-zinc-200 focus:ring-2 focus:ring-violet-200"
-                      >
-                        <option value="">DD</option>
-                        {Array.from({ length: 31 }, (_, i) => {
-                          const v = String(i + 1).padStart(2, "0");
-                          return (
-                            <option key={v} value={v}>
-                              {v}
-                            </option>
-                          );
-                        })}
-                      </select>
-
-                      <select
-                        value={dob.month}
-                        onChange={(e) =>
-                          setDob((p) => ({ ...p, month: e.target.value }))
-                        }
-                        className="px-3 bg-white border outline-none h-11 rounded-2xl border-zinc-200 focus:ring-2 focus:ring-violet-200"
-                      >
-                        <option value="">MM</option>
-                        {Array.from({ length: 12 }, (_, i) => {
-                          const v = String(i + 1).padStart(2, "0");
-                          return (
-                            <option key={v} value={v}>
-                              {v}
-                            </option>
-                          );
-                        })}
-                      </select>
-
-                      <select
-                        value={dob.year}
-                        onChange={(e) =>
-                          setDob((p) => ({ ...p, year: e.target.value }))
-                        }
-                        className="px-3 bg-white border outline-none h-11 rounded-2xl border-zinc-200 focus:ring-2 focus:ring-violet-200"
-                      >
-                        <option value="">YYYY</option>
-                        {Array.from({ length: 90 }, (_, i) => {
-                          const y = new Date().getFullYear() - i;
-                          return (
-                            <option key={y} value={String(y)}>
-                              {y}
-                            </option>
-                          );
-                        })}
-                      </select>
+                    <div className="mt-2 flex flex-wrap gap-2.5 rounded-2xl border border-zinc-200/80 bg-zinc-50/70 p-3 dark:border-zinc-700 dark:bg-zinc-800/40">
+                      {[
+                        { key: "day", label: "Day", placeholder: "DD", count: 31 },
+                        { key: "month", label: "Month", placeholder: "MM", count: 12 },
+                        { key: "year", label: "Year", placeholder: "YYYY", count: 90 },
+                      ].map(field => (
+                        <label key={field.key} className="min-w-[80px] flex-1">
+                          <span className="mb-1.5 block text-xs font-medium text-zinc-500 dark:text-zinc-400">{field.label}</span>
+                          <span className="relative block">
+                            <select
+                              aria-label={`Birth ${field.key}`}
+                              value={dob[field.key]}
+                              disabled={busy}
+                              onChange={event => setDob(previous => ({ ...previous, [field.key]: event.target.value }))}
+                              className="h-12 w-full min-w-0 cursor-pointer appearance-none rounded-xl border border-zinc-200 bg-white py-2 pl-3 pr-8 text-sm font-medium tabular-nums text-zinc-800 shadow-sm outline-none transition hover:border-violet-300 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 disabled:cursor-wait disabled:opacity-60 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:border-violet-400"
+                            >
+                              <option value="">{field.placeholder}</option>
+                              {Array.from({ length: field.count }, (_, index) => {
+                                const value = field.key === "year" ? String(new Date().getFullYear() - index) : String(index + 1).padStart(2, "0");
+                                return <option key={value} value={value}>{value}</option>;
+                              })}
+                            </select>
+                            <svg aria-hidden="true" className="pointer-events-none absolute right-2.5 top-1/2 size-3.5 -translate-y-1/2 text-violet-500 dark:text-violet-300" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="m4 6 4 4 4-4" />
+                            </svg>
+                          </span>
+                        </label>
+                      ))}
                     </div>
 
                     <button

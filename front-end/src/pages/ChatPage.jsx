@@ -1083,6 +1083,7 @@ export default function ChatPage() {
           ].join(" ")}
         >
           <Sidebar
+            setMe={setMe}
             me={me}
             chats={chats}
             friends={sortedFriends}

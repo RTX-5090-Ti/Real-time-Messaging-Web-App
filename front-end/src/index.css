@@ -1,5 +1,22 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
+.settings-dialog { animation: fadeInUp 180ms ease-out; }
+.settings-profile .grid { min-width: 0; }
+.dark .settings-profile .bg-white,
+.dark .settings-profile .bg-white\/95 { background-color: #18181b; }
+.dark .settings-profile .bg-zinc-50,
+.dark .settings-profile .bg-zinc-100 { background-color: #27272a; }
+.dark .settings-profile .text-zinc-900 { color: #f4f4f5; }
+.dark .settings-profile .text-zinc-500 { color: #a1a1aa; }
+.dark .settings-profile .border-zinc-200 { border-color: #3f3f46; }
+.dark .settings-profile input,
+.dark .settings-profile select { color-scheme: dark; }
+@media (max-width: 640px) {
+  .settings-profile [class*="grid-cols-"] { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-dialog { animation: none; }
+}
 .auth-feature-toast {
   animation: authToastLifetime 3s both;
 }

@@ -61,6 +61,23 @@ function useHistoryHarness(activeChatId = cid) {
 }
 
 describe("chat page after login", () => {
+  it("opens settings with theme choices and an embedded editable profile", async () => {
+    render(<MemoryRouter><ChatPage /></MemoryRouter>);
+    await screen.findByText("History message");
+    fireEvent.click(screen.getByTitle("Settings"));
+    expect(screen.getByRole("dialog", { name: "Settings" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: /Dark/ }));
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    expect(localStorage.getItem("theme_mode")).toBe("dark");
+    fireEvent.click(screen.getByRole("radio", { name: /Light/ }));
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Profile" }));
+    expect(screen.getByText("Account information")).toBeTruthy();
+    fireEvent.click(screen.getByTitle("Edit"));
+    expect(screen.getByText("Update personal information")).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Settings" })).toBeNull();
+  });
   it("keeps live presence when delayed friend loads overwrite profile data", async () => {
     const pending = deferred();
     const normal = mocks.get.getMockImplementation();

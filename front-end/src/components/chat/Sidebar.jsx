@@ -1,4 +1,5 @@
 import { useMemo, useRef, useEffect, useState } from "react";
+import SettingsModal from "./SettingsModal.jsx";
 import NotificationsDropdown from "./NotificationsDropdown.jsx";
 
 function ChatItem({
@@ -263,6 +264,7 @@ function IconBtn({ onClick, title, children, badge = 0 }) {
 
 export default function Sidebar({
   me,
+  setMe,
   chats,
   friends,
   activeChatId,
@@ -328,11 +330,7 @@ export default function Sidebar({
     };
   }, [themeMode]);
 
-  const cycleTheme = () => {
-    setThemeMode((prev) =>
-      prev === "system" ? "light" : prev === "light" ? "dark" : "system",
-    );
-  };
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const totalUnread = useMemo(
     () => (chats || []).reduce((sum, c) => sum + (Number(c.unread) || 0), 0),
@@ -480,84 +478,10 @@ export default function Sidebar({
           {/* Nút nhấn "Profile" mở profile */}
 
           {/* THEME (System / Light / Dark) - đặt trên avatar */}
-          <NavButton
-            active={themeMode === "dark"}
-            label={`Theme (${themeMode})`}
-            badge={0}
-            onClick={cycleTheme}
-          >
-            {themeMode === "dark" ? (
-              // moon
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M21 13.2A8.5 8.5 0 0 1 10.8 3a7 7 0 1 0 10.2 10.2Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            ) : themeMode === "light" ? (
-              // sun
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <circle
-                  cx="12"
-                  cy="12"
-                  r="4"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                />
-                <path
-                  d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            ) : (
-              // system
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M4 5h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                />
-                <path
-                  d="M8 21h8"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M12 17v4"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            )}
-          </NavButton>
-
-          <NavButton
-            active={false}
-            label="Profile"
-            badge={0}
-            onClick={onProfile}
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M20 21a8 8 0 1 0-16 0"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-              <circle
-                cx="12"
-                cy="7"
-                r="4"
-                stroke="currentColor"
-                strokeWidth="2"
-              />
+          <NavButton active={settingsOpen} label="Settings" badge={0} onClick={() => setSettingsOpen(true)}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="m9.5 3-.5 2-2 1-2-.5-2 3.5L4.5 11v2L3 15l2 3.5 2-.5 2 1 .5 2h5l.5-2 2-1 2 .5 2-3.5-1.5-2v-2L21 9l-2-3.5-2 .5-2-1-.5-2z" />
+              <circle cx="12" cy="12" r="3" />
             </svg>
           </NavButton>
 
@@ -809,6 +733,7 @@ export default function Sidebar({
           )}
         </div>
       </div>
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} themeMode={themeMode} setThemeMode={setThemeMode} me={me} setMe={setMe} />}
     </aside>
   );
 }
