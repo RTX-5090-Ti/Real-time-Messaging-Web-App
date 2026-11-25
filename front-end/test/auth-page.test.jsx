@@ -1,5 +1,5 @@
 import { afterEach, it, expect, vi } from "vitest";
-import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import { act, cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import AuthPage from "../src/pages/AuthPage.jsx";
 const mocks = vi.hoisted(() => ({ me: vi.fn() }));
@@ -19,6 +19,21 @@ it("shows login for an expired session", async () => {
   mocks.me.mockRejectedValue({ response: { status: 401 } });
   mount();
   expect(await screen.findByText("Login form")).toBeTruthy();
+});
+it("rechecks a stale session response after logout instead of showing a network error", async () => {
+  mocks.me.mockRejectedValueOnce({ code: "STALE_SESSION" }).mockRejectedValue({ response: { status: 401 } });
+  mount();
+  expect(await screen.findByText("Login form")).toBeTruthy();
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+it("logout shows login immediately and ignores an in-flight successful me response", async () => {
+  let resolve;
+  mocks.me.mockReturnValueOnce(new Promise(done => { resolve = done; }));
+  mount();
+  act(() => window.dispatchEvent(new Event("auth:ended")));
+  expect(screen.getByText("Login form")).toBeTruthy();
+  await act(async () => resolve({ data: { user: { id: "old-user" } } }));
+  expect(screen.queryByText("Chat home")).toBeNull();
 });
 it("offers retry instead of login for an offline/server error", async () => {
   mocks.me.mockRejectedValueOnce(new Error("offline")).mockResolvedValue({ data: { user: { id: "user" } } });

@@ -5,6 +5,7 @@ import RefreshToken from "../models/RefreshToken.js";
 import User from "../models/User.js";
 import { signToken, verifyToken, accessTokenSeconds } from "../utils/jwt.js";
 import { getIO } from "../sockets/io.js";
+import { describeDevice } from "../utils/device.js";
 
 export const authError = code => Object.assign(new Error(code), { status: 401, code });
 const hash = raw => createHash("sha256").update(raw).digest("hex");
@@ -30,10 +31,10 @@ function credentials(session, raw) {
     refreshToken: raw, accessMaxAge: seconds * 1000, refreshMaxAge: Math.max(0, session.expiresAt - Date.now()) };
 }
 
-export async function createSession(userId) {
+export async function createSession(userId, userAgent = "") {
   const raw = secret();
   const session = await mongoose.connection.transaction(async transaction => {
-    const [session] = await AuthSession.create([{ userId, expiresAt: new Date(Date.now() + 7 * 86400000) }], { session: transaction });
+    const [session] = await AuthSession.create([{ userId, device: describeDevice(userAgent), expiresAt: new Date(Date.now() + 7 * 86400000) }], { session: transaction });
     await RefreshToken.create([{ sessionId: session._id, tokenHash: hash(raw), expiresAt: session.expiresAt }], { session: transaction });
     return session;
   });
@@ -71,6 +72,10 @@ export async function rotateRefreshToken(raw) {
 export async function assertSessionActive(sessionId, userId) {
   if (!sessionId || !userId || !await AuthSession.exists({ _id: sessionId, userId, revokedAt: null, expiresAt: { $gt: new Date() } }))
     throw authError("SESSION_REVOKED");
+  // Persist activity at most once per minute, including socket operations.
+  await AuthSession.updateOne({ _id: sessionId, userId, revokedAt: null,
+    $or: [{ lastUsedAt: { $lt: new Date(Date.now() - 60000) } }, { lastUsedAt: null }],
+  }, { $max: { lastUsedAt: new Date() } });
 }
 
 export async function authenticateAccess(token) {

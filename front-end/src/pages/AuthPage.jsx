@@ -12,14 +12,24 @@ export default function AuthPage() {
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let cancelled = false;
+    const onEnded = () => {
+      cancelled = true;
+      setStatus("guest");
+    };
+    window.addEventListener("auth:ended", onEnded);
     AuthAPI.me().then(({ data }) => {
       if (cancelled) return;
       if (!data?.user) { setStatus("error"); return; }
       navigate("/home", { replace: true });
     }).catch(error => {
-      if (!cancelled) setStatus(unauthenticated(error) ? "guest" : "error");
+      if (cancelled) return;
+      if (error?.code === "STALE_SESSION") {
+        setAttempt(value => value + 1);
+        return;
+      }
+      setStatus(unauthenticated(error) ? "guest" : "error");
     });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; window.removeEventListener("auth:ended", onEnded); };
   }, [navigate, attempt]);
 
   const handleSignInSuccess = () => {

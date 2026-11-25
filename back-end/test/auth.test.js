@@ -15,6 +15,13 @@ import { signToken, verifyToken } from "../src/utils/jwt.js";
 import { accessCookieName, refreshCookieName, getCookieOptions } from "../src/utils/cookie.js";
 import { initSocket } from "../src/sockets/index.js";
 import { setIO } from "../src/sockets/io.js";
+import { describeDevice } from "../src/utils/device.js";
+
+test("device hints distinguish common browsers without treating them as identity", () => {
+  assert.deepEqual(describeDevice("Mozilla/5.0 (Windows NT 10.0) Chrome/130.0 Safari/537.36 Edg/130.0"), { browser: "Edge", os: "Windows", kind: "desktop" });
+  assert.deepEqual(describeDevice("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Version/18.0 Mobile/15E148 Safari/604.1"), { browser: "Safari", os: "iPhone", kind: "mobile" });
+  assert.equal(describeDevice("").browser, "Trình duyệt không xác định");
+});
 
 test("production cookies use HttpOnly, Secure and scoped refresh path", () => {
   const previous = process.env.NODE_ENV;
@@ -40,10 +47,11 @@ test("session authentication and refresh integration", { skip: process.env.CHAT_
     await Promise.all([User, AuthSession, RefreshToken].map(m => m.createIndexes()));
     await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
     const url = `http://127.0.0.1:${server.address().port}`;
-    async function request(path, pair, { method = "POST", origin = process.env.CLIENT_ORIGIN || "http://localhost:5173", body } = {}) {
+    async function request(path, pair, { method = "POST", origin = process.env.CLIENT_ORIGIN || "http://localhost:5173", body, userAgent } = {}) {
       const response = await fetch(`${url}${path}`, { method, headers: {
         ...(origin ? { Origin: origin } : {}), ...(pair ? { Cookie: cookie(pair) } : {}),
         ...(body ? { "Content-Type": "application/json" } : {}),
+        ...(userAgent ? { "User-Agent": userAgent } : {}),
       }, ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(10000) });
       const headers = response.headers.getSetCookie();
       const parsed = Object.fromEntries(headers.map(value => value.split(";")[0].split("=")));
@@ -142,6 +150,49 @@ test("session authentication and refresh integration", { skip: process.env.CHAT_
       assert.equal((await socket(fresh.pair)).connected, true);
     });
 
+    await t.test("device management isolates accounts, revokes sockets/refresh and preserves current session", async () => {
+      const login = await request("/auth/login", null, { body: { email: "token@example.test", password: "test-password-123" }, userAgent: "Mozilla/5.0 (Windows NT 10.0) Chrome/130.0 Safari/537.36" });
+      assert.equal(login.status, 200);
+      const current = login.pair;
+      const currentId = verifyToken(current.accessToken).sid;
+      const other = await createSession(userId, "Mozilla/5.0 (iPhone) Version/18.0 Mobile/15E148 Safari/604.1");
+      const otherId = verifyToken(other.accessToken).sid;
+      const stranger = await User.create({ name: "Stranger", email: "stranger@devices.test", passwordHash: "test-only" });
+      const foreign = await createSession(stranger._id);
+      const foreignId = verifyToken(foreign.accessToken).sid;
+      const list = await request("/auth/sessions", current, { method: "GET" });
+      assert.equal(list.status, 200);
+      assert.equal(list.data.sessions[0].id, currentId);
+      assert.equal(list.data.sessions[0].current, true);
+      assert.equal(list.data.sessions[0].device.browser, "Chrome");
+      assert.equal(list.data.sessions.find(s => s.id === otherId).device.os, "iPhone");
+      assert.ok(!list.data.sessions.some(s => s.id === foreignId));
+      assert.ok(list.data.sessions.every(s => !s.accessToken && !s.refreshToken && !s.tokenHash && !s.userId));
+      assert.equal((await request(`/auth/sessions/${foreignId}`, current, { method: "DELETE" })).status, 404);
+      assert.equal((await request("/auth/sessions/bad-id", current, { method: "DELETE" })).status, 400);
+      assert.equal((await request("/auth/sessions/revoke-others", current, { origin: "https://evil.example" })).status, 403);
+      const client = await socket(other);
+      const closed = receive(client, "disconnect");
+      assert.equal((await request(`/auth/sessions/${otherId}`, current, { method: "DELETE" })).status, 200);
+      await closed;
+      assert.equal((await request("/auth/refresh", other)).status, 401);
+      const another = await createSession(userId);
+      const anotherClient = await socket(another);
+      const anotherClosed = receive(anotherClient, "disconnect");
+      assert.equal((await request("/auth/sessions/revoke-others", current)).status, 200);
+      await anotherClosed;
+      assert.equal((await request("/auth/refresh", another)).status, 401);
+      assert.equal((await request("/auth/me", current, { method: "GET" })).status, 200);
+      assert.equal((await request("/auth/me", foreign, { method: "GET" })).status, 200);
+      assert.equal((await request("/auth/sessions", current, { method: "GET" })).data.sessions.length, 1);
+      // Existing sessions without device metadata still load.
+      await AuthSession.updateOne({ _id: currentId }, { $unset: { device: 1 }, $set: { lastUsedAt: new Date(0) } });
+      const legacy = await request("/auth/sessions", current, { method: "GET" });
+      assert.equal(legacy.data.sessions[0].device, null);
+      assert.ok(new Date(legacy.data.sessions[0].lastUsedAt).getTime() > Date.now() - 60000);
+      assert.equal((await request(`/auth/sessions/${currentId}`, current, { method: "DELETE" })).status, 200);
+      assert.equal((await request("/auth/me", current, { method: "GET" })).status, 401);
+    });
     await t.test("expired sessions cannot refresh even before TTL cleanup", async () => {
       const pair = await createSession(userId);
       const decoded = verifyToken(pair.accessToken);

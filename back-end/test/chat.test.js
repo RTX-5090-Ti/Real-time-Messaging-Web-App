@@ -97,6 +97,7 @@ test("history merge preserves new messages, pending sends and newer edits", () =
 
 test("malformed socket payload returns an error ACK rather than throwing", async t => {
   t.mock.method(AuthSession, "exists", async () => true);
+  t.mock.method(AuthSession, "updateOne", async () => ({}));
   let connect;
   const handlers = {};
   const io = { use() {}, on(event, fn) { connect = fn; }, emit() {} };

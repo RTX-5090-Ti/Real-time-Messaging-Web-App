@@ -1,10 +1,7 @@
 import { useState } from "react";
 import FeatureToast from "../FeatureToast.jsx";
 
-const previewDevices = [
-  { name: "Chrome trên Windows", detail: "Máy tính · Hoạt động gần đây", current: true },
-  { name: "Safari trên iPhone", detail: "Điện thoại · Hoạt động gần đây", current: false },
-];
+import DeviceSessions from "./DeviceSessions.jsx";
 
 export default function SecuritySettings() {
   const [toastVersion, setToastVersion] = useState(0);
@@ -14,33 +11,7 @@ export default function SecuritySettings() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-2xl border border-zinc-200 dark:border-zinc-700" aria-labelledby="devices-heading">
-        <div className="border-b border-zinc-100 p-4 dark:border-zinc-800 sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h4 id="devices-heading" className="font-semibold">Quản lý thiết bị</h4>
-            <span className="rounded-full bg-violet-50 px-2.5 py-1 text-[11px] font-medium text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">Dữ liệu minh họa</span>
-          </div>
-          <p className="mt-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Danh sách thiết bị thật sẽ hiển thị khi tính năng được hoàn thiện.</p>
-        </div>
-        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-          {previewDevices.map(device => <li key={device.name} className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300" aria-hidden="true">
-              <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                {device.current ? <><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8m-4-4v4" /></> : <><rect x="6" y="2" width="12" height="20" rx="3" /><path d="M10 18h4" /></>}
-              </svg>
-            </span>
-            <div className="min-w-0 flex-1 basis-32">
-              <p className="text-sm font-medium">{device.name}</p>
-              <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{device.detail}</p>
-              {device.current && <span className="mt-1 inline-block text-xs font-medium text-emerald-600 dark:text-emerald-400">Thiết bị này (minh họa)</span>}
-            </div>
-            {!device.current && <button type="button" onClick={notify} className="rounded-lg px-3 py-2 text-xs font-medium text-rose-600 transition hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-400 dark:text-rose-400 dark:hover:bg-rose-500/10">Đăng xuất</button>}
-          </li>)}
-        </ul>
-        <div className="border-t border-zinc-100 bg-zinc-50/60 p-4 dark:border-zinc-800 dark:bg-zinc-950/20 sm:px-5">
-          <button type="button" onClick={notify} className="w-full rounded-xl border border-rose-200 px-4 py-2.5 text-sm font-medium text-rose-600 transition hover:bg-rose-50 focus-visible:ring-2 focus-visible:ring-rose-400 dark:border-rose-900/60 dark:text-rose-400 dark:hover:bg-rose-500/10">Đăng xuất các thiết bị khác</button>
-        </div>
-      </section>
+      <DeviceSessions />
 
       <section className="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-700 sm:p-5" aria-labelledby="password-heading">
         <h4 id="password-heading" className="font-semibold">Đổi mật khẩu</h4>

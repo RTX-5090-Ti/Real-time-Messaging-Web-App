@@ -8,8 +8,15 @@ export function createSessionClient(raw, { notify, lock = work => work() }) {
   let refreshing = null;
   let stopped = false;
   let generation = 0;
-  const started = () => { stopped = false; generation++; notify("auth:started"); };
-  const ended = (broadcast = true) => { stopped = true; generation++; notify("auth:ended", { broadcast }); };
+  let terminated = false;
+  const started = () => { stopped = false; terminated = false; generation++; notify("auth:started"); };
+  const ended = (broadcast = true) => {
+    if (terminated) return;
+    terminated = true;
+    stopped = true;
+    generation++;
+    notify("auth:ended", { broadcast });
+  };
   const refresh = () => {
     if (stopped) return Promise.reject(sessionEnded());
     if (refreshing) return refreshing;

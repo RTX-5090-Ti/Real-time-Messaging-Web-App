@@ -5,6 +5,23 @@ const expired = () => ({ response: { status: 401, data: { code: "ACCESS_EXPIRED"
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 
 describe("refresh coordination", () => {
+  it("socket revocation and logout completion end the same session only once", async () => {
+    const gate = deferred();
+    const notify = vi.fn();
+    const session = createSessionClient({ post: () => gate.promise }, { notify });
+    session.started();
+    const pending = session.logout();
+    session.ended(); // Server emits auth:revoked before HTTP logout completes.
+    const generation = session.generation();
+    gate.resolve({ data: { ok: true } });
+    await pending;
+    session.ended(false); // Another tab broadcasts the same logout.
+    expect(session.generation()).toBe(generation);
+    expect(notify.mock.calls.filter(([name]) => name === "auth:ended")).toHaveLength(1);
+    session.started();
+    session.ended();
+    expect(notify.mock.calls.filter(([name]) => name === "auth:ended")).toHaveLength(2);
+  });
   it("ignores a late refresh failure from a previous login generation", async () => {
     let reject;
     const raw = { get: vi.fn().mockRejectedValue(expired()), post: vi.fn(() => new Promise((_, fail) => { reject = fail; })) };

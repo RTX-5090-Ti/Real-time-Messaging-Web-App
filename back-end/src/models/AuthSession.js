@@ -5,6 +5,7 @@ const schema = new mongoose.Schema({
   expiresAt: { type: Date, required: true },
   revokedAt: { type: Date, default: null },
   lastUsedAt: { type: Date, default: Date.now },
+  device: { browser: String, os: String, kind: String },
 }, { timestamps: true });
 schema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 export default mongoose.model("AuthSession", schema);

@@ -5,4 +5,7 @@ export const AuthAPI = {
   register: (name, email, password) => authenticateSession("/auth/register", { name, email, password }),
   me: () => api.get("/auth/me"),
   logout: () => logoutSession(),
+  sessions: () => api.get("/auth/sessions"),
+  revokeSession: id => api.delete(`/auth/sessions/${id}`),
+  revokeOtherSessions: () => api.post("/auth/sessions/revoke-others"),
 };
